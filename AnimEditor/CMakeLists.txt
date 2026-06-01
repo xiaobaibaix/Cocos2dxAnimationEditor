@@ -9,6 +9,8 @@ file(GLOB IMGUI_SOURCES
 add_executable(anim_editor
     src/main.cpp
     src/core/Serializer.cpp
+    src/core/SceneGraph.cpp
+    src/core/UndoSystem.cpp
     src/ui/FileBrowserPanel.cpp
     src/ui/EditorUI.cpp
     ${IMGUI_SOURCES}

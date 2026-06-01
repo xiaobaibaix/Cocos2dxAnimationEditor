@@ -24,3 +24,27 @@ set_target_properties(test_Serializer PROPERTIES
     INSTALL_RPATH "/opt/homebrew/anaconda3/lib"
 )
 add_test(NAME Serializer COMMAND test_Serializer)
+
+add_executable(test_SceneGraph
+    test_SceneGraph.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/SceneGraph.cpp
+)
+target_include_directories(test_SceneGraph PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_SceneGraph PRIVATE GTest::gtest_main)
+set_target_properties(test_SceneGraph PROPERTIES
+    BUILD_RPATH "/opt/homebrew/anaconda3/lib"
+    INSTALL_RPATH "/opt/homebrew/anaconda3/lib"
+)
+add_test(NAME SceneGraph COMMAND test_SceneGraph)
+
+add_executable(test_UndoSystem
+    test_UndoSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/UndoSystem.cpp
+)
+target_include_directories(test_UndoSystem PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_UndoSystem PRIVATE GTest::gtest_main)
+set_target_properties(test_UndoSystem PROPERTIES
+    BUILD_RPATH "/opt/homebrew/anaconda3/lib"
+    INSTALL_RPATH "/opt/homebrew/anaconda3/lib"
+)
+add_test(NAME UndoSystem COMMAND test_UndoSystem)
