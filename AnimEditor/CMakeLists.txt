@@ -9,6 +9,7 @@ file(GLOB IMGUI_SOURCES
 add_executable(anim_editor
     src/main.cpp
     src/core/Serializer.cpp
+    src/ui/FileBrowserPanel.cpp
     ${IMGUI_SOURCES}
 )
 
