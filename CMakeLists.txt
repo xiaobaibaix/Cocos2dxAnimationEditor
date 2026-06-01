@@ -15,6 +15,9 @@ set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(third_party/glfw)
 # ImGui sources are collected directly by AnimEditor/CMakeLists.txt
 
+# Runtime library
+add_subdirectory(AnimRuntime)
+
 # Editor application
 enable_testing()
 add_subdirectory(AnimEditor)
