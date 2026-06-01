@@ -48,3 +48,15 @@ set_target_properties(test_UndoSystem PROPERTIES
     INSTALL_RPATH "/opt/homebrew/anaconda3/lib"
 )
 add_test(NAME UndoSystem COMMAND test_UndoSystem)
+
+add_executable(test_Easing
+    test_Easing.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/Easing.cpp
+)
+target_include_directories(test_Easing PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_Easing PRIVATE GTest::gtest_main)
+set_target_properties(test_Easing PROPERTIES
+    BUILD_RPATH "/opt/homebrew/anaconda3/lib"
+    INSTALL_RPATH "/opt/homebrew/anaconda3/lib"
+)
+add_test(NAME Easing COMMAND test_Easing)
