@@ -73,20 +73,22 @@ bool EditorUI::init() {
         // Scene graph changed — can trigger auto-save or dirty flag later
     });
 
+    // Initialize preview canvas (renders to FBO, displayed via ImGui texture)
+    previewCanvas_.init(800, 600);
+
     return true;
 }
 
 void EditorUI::shutdown() {
-    // Nothing to clean up yet
+    previewCanvas_.shutdown();
 }
 
 void EditorUI::render() {
     renderMenuBar();
     fileBrowser_.render();
 
-    ImGui::Begin("Preview");
-    ImGui::Text("Preview panel (placeholder)");
-    ImGui::End();
+    // Preview canvas with FBO-rendered content
+    previewCanvas_.render();
 
     // Node Tree + Timeline bottom panel
     ImGui::Begin("Node Tree + Timeline");

@@ -13,8 +13,10 @@ add_executable(anim_editor
     src/core/UndoSystem.cpp
     src/core/Easing.cpp
     src/core/AnimationEngine.cpp
+    src/renderer/CocosEmbed.cpp
     src/ui/FileBrowserPanel.cpp
     src/ui/NodeTreePanel.cpp
+    src/ui/PreviewCanvas.cpp
     src/ui/PropertyPanel.cpp
     src/ui/EditorUI.cpp
     src/ui/TimelinePanel.cpp
