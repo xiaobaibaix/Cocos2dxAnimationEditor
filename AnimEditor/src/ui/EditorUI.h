@@ -41,6 +41,7 @@ private:
     void renderMenuBar();
     void renderPopups();
     void syncProjectToUI();
+    void saveAs(const std::string& path);
 };
 
 } // namespace anim

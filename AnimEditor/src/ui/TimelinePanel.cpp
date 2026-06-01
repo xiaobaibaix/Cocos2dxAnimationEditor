@@ -2,11 +2,34 @@
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace anim {
 
 void TimelinePanel::renderClipSelector(AnimProject* project) {
-    if (!project || project->animations.empty()) return;
+    if (!project) return;
+
+    ImGui::Text("Clip:");
+    ImGui::SameLine();
+
+    if (project->animations.empty()) {
+        ImGui::Text("No clips");
+        ImGui::SameLine();
+        if (ImGui::Button("New")) {
+            // Auto-name new clip
+            Animation newClip;
+            newClip.name = "clip_0";
+            newClip.duration = 1.0f;
+            newClip.loop = false;
+            project->animations.push_back(std::move(newClip));
+            currentAnim_ = project->animations.back().name;
+            currentTime_ = 0.0f;
+            if (onTimeChanged_) {
+                onTimeChanged_(0.0f);
+            }
+        }
+        return;
+    }
 
     // Build a list of clip names for the combo
     int currentIndex = -1;
@@ -17,10 +40,9 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
             currentIndex = i;
         }
     }
+    if (currentIndex < 0) currentIndex = 0;
 
-    ImGui::Text("Clip:");
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(180.0f);
+    ImGui::SetNextItemWidth(160.0f);
     if (ImGui::Combo("##clipSelector", &currentIndex, clipNames.data(),
                      static_cast<int>(clipNames.size()))) {
         if (currentIndex >= 0 && currentIndex < static_cast<int>(project->animations.size())) {
@@ -28,6 +50,86 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
             currentTime_ = 0.0f;
             if (onTimeChanged_) {
                 onTimeChanged_(0.0f);
+            }
+        }
+    }
+
+    ImGui::SameLine();
+
+    // New button
+    if (ImGui::Button("New")) {
+        // Auto-name: clip_0, clip_1, clip_2, ...
+        int clipNum = 0;
+        std::string candidate;
+        bool collision;
+        do {
+            candidate = "clip_" + std::to_string(clipNum++);
+            collision = false;
+            for (const auto& a : project->animations) {
+                if (a.name == candidate) { collision = true; break; }
+            }
+        } while (collision);
+
+        Animation newClip;
+        newClip.name = candidate;
+        newClip.duration = 1.0f;
+        newClip.loop = false;
+        project->animations.push_back(std::move(newClip));
+        currentAnim_ = project->animations.back().name;
+        currentTime_ = 0.0f;
+        if (onTimeChanged_) {
+            onTimeChanged_(0.0f);
+        }
+    }
+
+    ImGui::SameLine();
+
+    // Del button
+    if (ImGui::Button("Del")) {
+        if (currentIndex >= 0 && currentIndex < static_cast<int>(project->animations.size())) {
+            project->animations.erase(project->animations.begin() + currentIndex);
+            if (!project->animations.empty()) {
+                currentAnim_ = project->animations.front().name;
+            } else {
+                currentAnim_ = "";
+            }
+            currentTime_ = 0.0f;
+            if (onTimeChanged_) {
+                onTimeChanged_(0.0f);
+            }
+            renameMode_ = false;
+        }
+    }
+
+    // Rename support — find the current animation
+    if (currentIndex >= 0 && currentIndex < static_cast<int>(project->animations.size())) {
+        ImGui::SameLine();
+        if (ImGui::Button(renameMode_ ? "OK" : "Rename")) {
+            if (renameMode_) {
+                // Confirm rename
+                if (clipNameBuf_[0] != '\0') {
+                    project->animations[currentIndex].name = clipNameBuf_;
+                    currentAnim_ = clipNameBuf_;
+                }
+                renameMode_ = false;
+            } else {
+                // Enter rename mode
+                auto& anim = project->animations[currentIndex];
+                std::strncpy(clipNameBuf_, anim.name.c_str(), sizeof(clipNameBuf_) - 1);
+                clipNameBuf_[sizeof(clipNameBuf_) - 1] = '\0';
+                renameMode_ = true;
+            }
+        }
+
+        if (renameMode_) {
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(140.0f);
+            bool confirmed = ImGui::InputText("##renameClip", clipNameBuf_, sizeof(clipNameBuf_),
+                                              ImGuiInputTextFlags_EnterReturnsTrue);
+            if (confirmed && clipNameBuf_[0] != '\0') {
+                project->animations[currentIndex].name = clipNameBuf_;
+                currentAnim_ = clipNameBuf_;
+                renameMode_ = false;
             }
         }
     }

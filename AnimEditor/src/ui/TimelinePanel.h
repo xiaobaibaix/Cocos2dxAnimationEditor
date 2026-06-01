@@ -38,6 +38,9 @@ private:
     OnKeyframeAdded onKeyframeAdded_;
     OnKeyframeRemoved onKeyframeRemoved_;
 
+    char clipNameBuf_[256] = {};
+    bool renameMode_ = false;
+
     void renderTransportControls(Animation* anim);
     void renderTrackRow(const Track& track, float duration);
 };

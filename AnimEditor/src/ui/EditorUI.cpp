@@ -156,20 +156,14 @@ void EditorUI::renderMenuBar() {
                 undoSystem_.clear();
                 currentProject_ = std::make_shared<AnimProject>();
                 currentFilePath_.clear();
-                nodeTreePanel_.setSelectedNode("");
-                propertyPanel_.setNode(nullptr);
 
-                // Create a default animation and wire it to the timeline
                 Animation defaultAnim;
                 defaultAnim.name = "New Animation";
                 defaultAnim.duration = 2.0f;
                 defaultAnim.loop = false;
                 currentProject_->animations.push_back(std::move(defaultAnim));
 
-                timelinePanel_.setProject(currentProject_.get());
-                timelinePanel_.setCurrentAnimation("New Animation");
-                timelinePanel_.setCurrentTime(0.0f);
-                timelinePanel_.setSelectedNode("");
+                syncProjectToUI();
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Save", "Ctrl+S")) {
@@ -277,8 +271,7 @@ void EditorUI::renderPopups() {
                                           ImGuiInputTextFlags_EnterReturnsTrue);
         if (ImGui::Button("Save") || confirmed) {
             if (popupTextBuf_[0] != '\0' && currentProject_) {
-                currentFilePath_ = popupTextBuf_;
-                Serializer::saveToFile(*currentProject_, currentFilePath_);
+                saveAs(popupTextBuf_);
             }
             ImGui::CloseCurrentPopup();
         }
@@ -341,6 +334,12 @@ void EditorUI::syncProjectToUI() {
 
 void EditorUI::openProject(const std::string& folderPath) {
     fileBrowser_.setRootPath(folderPath);
+}
+
+void EditorUI::saveAs(const std::string& path) {
+    if (!currentProject_) return;
+    currentFilePath_ = path;
+    Serializer::saveToFile(*currentProject_, currentFilePath_);
 }
 
 void EditorUI::openAnimFile(const std::string& filePath) {
