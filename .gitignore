@@ -1,0 +1,14 @@
+build/
+.superpowers/
+.DS_Store
+*.o
+*.a
+*.dylib
+*.dSYM
+compile_commands.json
+.cache/
+*.swp
+*~
+.vscode/
+.idea/
+cmake-build-*/
