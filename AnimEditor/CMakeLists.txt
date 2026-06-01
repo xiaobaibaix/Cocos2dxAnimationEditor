@@ -10,6 +10,7 @@ add_executable(anim_editor
     src/main.cpp
     src/core/Serializer.cpp
     src/ui/FileBrowserPanel.cpp
+    src/ui/EditorUI.cpp
     ${IMGUI_SOURCES}
 )
 

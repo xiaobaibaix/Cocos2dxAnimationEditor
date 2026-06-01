@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "ui/EditorUI.h"
 
 int main(int argc, char** argv) {
     (void)argc;
@@ -38,6 +39,10 @@ int main(int argc, char** argv) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 
+    // Setup editor UI
+    anim::EditorUI editor;
+    editor.init();
+
     // Main loop
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -50,10 +55,7 @@ int main(int argc, char** argv) {
         // Full-window dockspace
         ImGui::DockSpaceOverViewport(0, nullptr, ImGuiDockNodeFlags_PassthruCentralNode);
 
-        // Demo window
-        ImGui::Begin("Welcome");
-        ImGui::Text("AnimEditor - Phase 1 Skeleton");
-        ImGui::End();
+        editor.render();
 
         // Render
         ImGui::Render();
@@ -68,6 +70,8 @@ int main(int argc, char** argv) {
 
         glfwSwapBuffers(window);
     }
+
+    editor.shutdown();
 
     // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
