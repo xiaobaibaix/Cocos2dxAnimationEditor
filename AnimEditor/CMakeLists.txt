@@ -12,6 +12,7 @@ add_executable(anim_editor
     src/core/SceneGraph.cpp
     src/core/UndoSystem.cpp
     src/core/Easing.cpp
+    src/core/AnimationEngine.cpp
     src/ui/FileBrowserPanel.cpp
     src/ui/NodeTreePanel.cpp
     src/ui/PropertyPanel.cpp

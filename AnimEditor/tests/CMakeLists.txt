@@ -60,3 +60,16 @@ set_target_properties(test_Easing PROPERTIES
     INSTALL_RPATH "/opt/homebrew/anaconda3/lib"
 )
 add_test(NAME Easing COMMAND test_Easing)
+
+add_executable(test_AnimationEngine
+    test_AnimationEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/AnimationEngine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core/Easing.cpp
+)
+target_include_directories(test_AnimationEngine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(test_AnimationEngine PRIVATE GTest::gtest_main)
+set_target_properties(test_AnimationEngine PROPERTIES
+    BUILD_RPATH "/opt/homebrew/anaconda3/lib"
+    INSTALL_RPATH "/opt/homebrew/anaconda3/lib"
+)
+add_test(NAME AnimationEngine COMMAND test_AnimationEngine)
