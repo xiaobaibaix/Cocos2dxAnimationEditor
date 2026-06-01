@@ -32,7 +32,15 @@ private:
     std::shared_ptr<anim::AnimProject> currentProject_;
     std::string currentFilePath_;
 
+    // Popup state
+    bool showNewClipPopup_ = false;
+    bool showSaveAsPopup_ = false;
+    bool showOpenPopup_ = false;
+    char popupTextBuf_[256] = {};
+
     void renderMenuBar();
+    void renderPopups();
+    void syncProjectToUI();
 };
 
 } // namespace anim

@@ -21,8 +21,10 @@ public:
     void setOnKeyframeRemoved(OnKeyframeRemoved cb) { onKeyframeRemoved_ = std::move(cb); }
 
     float getCurrentTime() const { return currentTime_; }
+    const std::string& getCurrentAnimationName() const { return currentAnim_; }
     bool isPlaying() const { return isPlaying_; }
     void render();
+    void renderClipSelector(AnimProject* project);
 
 private:
     AnimProject* project_ = nullptr;

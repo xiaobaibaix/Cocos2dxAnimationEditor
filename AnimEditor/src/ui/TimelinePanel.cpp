@@ -5,8 +5,39 @@
 
 namespace anim {
 
+void TimelinePanel::renderClipSelector(AnimProject* project) {
+    if (!project || project->animations.empty()) return;
+
+    // Build a list of clip names for the combo
+    int currentIndex = -1;
+    std::vector<const char*> clipNames;
+    for (int i = 0; i < static_cast<int>(project->animations.size()); ++i) {
+        clipNames.push_back(project->animations[i].name.c_str());
+        if (project->animations[i].name == currentAnim_) {
+            currentIndex = i;
+        }
+    }
+
+    ImGui::Text("Clip:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(180.0f);
+    if (ImGui::Combo("##clipSelector", &currentIndex, clipNames.data(),
+                     static_cast<int>(clipNames.size()))) {
+        if (currentIndex >= 0 && currentIndex < static_cast<int>(project->animations.size())) {
+            currentAnim_ = project->animations[currentIndex].name;
+            currentTime_ = 0.0f;
+            if (onTimeChanged_) {
+                onTimeChanged_(0.0f);
+            }
+        }
+    }
+}
+
 void TimelinePanel::render() {
     ImGui::Begin("Timeline");
+
+    // Clip selector at top
+    renderClipSelector(project_);
 
     if (!project_ || currentAnim_.empty()) {
         ImGui::TextDisabled("No animation selected. Use File > New Animation or open a project.");

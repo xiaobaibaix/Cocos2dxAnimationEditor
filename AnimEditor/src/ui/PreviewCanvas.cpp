@@ -28,6 +28,27 @@ void PreviewCanvas::render() {
             avail,
             ImVec2(0.0f, 1.0f),
             ImVec2(1.0f, 0.0f));
+
+        hovered_ = ImGui::IsItemHovered();
+
+        // Drag detection on the preview image
+        if (hovered_ && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            dragging_ = true;
+        }
+    } else {
+        hovered_ = false;
+    }
+
+    // Track drag delta while mouse button is held
+    if (dragging_ && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        ImVec2 delta = ImGui::GetIO().MouseDelta;
+        if ((delta.x != 0.0f || delta.y != 0.0f) && onNodeDragged_) {
+            onNodeDragged_(delta.x, delta.y);
+        }
+    }
+
+    if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        dragging_ = false;
     }
 
     ImGui::End();
