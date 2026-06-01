@@ -16,4 +16,5 @@ add_subdirectory(third_party/glfw)
 # ImGui sources are collected directly by AnimEditor/CMakeLists.txt
 
 # Editor application
+enable_testing()
 add_subdirectory(AnimEditor)
