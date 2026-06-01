@@ -17,6 +17,7 @@ add_executable(anim_editor
     src/ui/NodeTreePanel.cpp
     src/ui/PropertyPanel.cpp
     src/ui/EditorUI.cpp
+    src/ui/TimelinePanel.cpp
     ${IMGUI_SOURCES}
 )
 

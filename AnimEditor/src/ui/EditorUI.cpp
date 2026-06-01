@@ -24,10 +24,49 @@ bool EditorUI::init() {
                 propertyPanel_.setNode(*found);
             }
         }
+        timelinePanel_.setSelectedNode(nodeId);
     });
 
     propertyPanel_.setOnPropertyChanged([](const std::string& /*nodeId*/) {
         // Property changed notification — can trigger auto-save or undo registration later
+    });
+
+    // Timeline panel callbacks
+    timelinePanel_.setOnTimeChanged([this](float time) {
+        // Update current time — Phase 4 will drive preview via AnimationEngine
+        // Time is already updated inside TimelinePanel via slider/buttons
+    });
+
+    timelinePanel_.setOnKeyframeAdded([this](const std::string& nodeId, const std::string& property) {
+        if (!currentProject_ || currentProject_->animations.empty()) return;
+        auto& anim = currentProject_->animations.back();
+        // Find or create track
+        Track* targetTrack = nullptr;
+        for (auto& t : anim.tracks) {
+            if (t.nodeId == nodeId && t.property == property) {
+                targetTrack = &t;
+                break;
+            }
+        }
+        if (!targetTrack) {
+            anim.tracks.push_back(Track{nodeId, property, {}});
+            targetTrack = &anim.tracks.back();
+        }
+        float time = timelinePanel_.getCurrentTime();
+        targetTrack->keyframes.push_back(Keyframe{time, 0.0f, EasingType::Linear});
+    });
+
+    timelinePanel_.setOnKeyframeRemoved([this](const std::string& nodeId, const std::string& property, int index) {
+        if (!currentProject_ || currentProject_->animations.empty()) return;
+        auto& anim = currentProject_->animations.back();
+        for (auto& t : anim.tracks) {
+            if (t.nodeId == nodeId && t.property == property) {
+                if (index >= 0 && index < static_cast<int>(t.keyframes.size())) {
+                    t.keyframes.erase(t.keyframes.begin() + index);
+                }
+                return;
+            }
+        }
     });
 
     sceneGraph_.setOnChanged([this]() {
@@ -61,9 +100,9 @@ void EditorUI::render() {
 
     ImGui::SameLine();
 
-    // Right side: placeholder for Timeline (Phase 3)
+    // Right side: Timeline panel
     ImGui::BeginChild("TimelineSide", ImVec2(0, 0), true);
-    ImGui::TextDisabled("Timeline (Phase 3)");
+    timelinePanel_.render();
     ImGui::EndChild();
 
     ImGui::End();
@@ -85,6 +124,18 @@ void EditorUI::renderMenuBar() {
                 currentFilePath_.clear();
                 nodeTreePanel_.setSelectedNode("");
                 propertyPanel_.setNode(nullptr);
+
+                // Create a default animation and wire it to the timeline
+                Animation defaultAnim;
+                defaultAnim.name = "New Animation";
+                defaultAnim.duration = 2.0f;
+                defaultAnim.loop = false;
+                currentProject_->animations.push_back(std::move(defaultAnim));
+
+                timelinePanel_.setProject(currentProject_.get());
+                timelinePanel_.setCurrentAnimation("New Animation");
+                timelinePanel_.setCurrentTime(0.0f);
+                timelinePanel_.setSelectedNode("");
             }
             if (ImGui::MenuItem("Save")) {
                 // TODO: save current project
