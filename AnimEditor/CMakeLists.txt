@@ -12,6 +12,8 @@ add_executable(anim_editor
     src/core/SceneGraph.cpp
     src/core/UndoSystem.cpp
     src/ui/FileBrowserPanel.cpp
+    src/ui/NodeTreePanel.cpp
+    src/ui/PropertyPanel.cpp
     src/ui/EditorUI.cpp
     ${IMGUI_SOURCES}
 )

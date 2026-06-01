@@ -13,6 +13,27 @@ bool EditorUI::init() {
             openAnimFile(path);
         }
     });
+
+    nodeTreePanel_.setSceneGraph(&sceneGraph_);
+    nodeTreePanel_.setOnNodeSelected([this](const std::string& nodeId) {
+        if (nodeId.empty()) {
+            propertyPanel_.setNode(nullptr);
+        } else {
+            auto found = sceneGraph_.findById(nodeId);
+            if (found) {
+                propertyPanel_.setNode(*found);
+            }
+        }
+    });
+
+    propertyPanel_.setOnPropertyChanged([](const std::string& /*nodeId*/) {
+        // Property changed notification — can trigger auto-save or undo registration later
+    });
+
+    sceneGraph_.setOnChanged([this]() {
+        // Scene graph changed — can trigger auto-save or dirty flag later
+    });
+
     return true;
 }
 
@@ -28,13 +49,27 @@ void EditorUI::render() {
     ImGui::Text("Preview panel (placeholder)");
     ImGui::End();
 
-    ImGui::Begin("Properties");
-    ImGui::Text("Properties panel (placeholder)");
+    // Node Tree + Timeline bottom panel
+    ImGui::Begin("Node Tree + Timeline");
+    float panelWidth = ImGui::GetContentRegionAvail().x;
+    float nodeTreeWidth = panelWidth * 0.35f;
+
+    // Left side: Node Tree
+    ImGui::BeginChild("NodeTreeSide", ImVec2(nodeTreeWidth, 0), true);
+    nodeTreePanel_.render();
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    // Right side: placeholder for Timeline (Phase 3)
+    ImGui::BeginChild("TimelineSide", ImVec2(0, 0), true);
+    ImGui::TextDisabled("Timeline (Phase 3)");
+    ImGui::EndChild();
+
     ImGui::End();
 
-    ImGui::Begin("Node Tree + Timeline");
-    ImGui::Text("Node Tree + Timeline panel (placeholder)");
-    ImGui::End();
+    // Properties panel
+    propertyPanel_.render();
 }
 
 void EditorUI::renderMenuBar() {
@@ -44,10 +79,24 @@ void EditorUI::renderMenuBar() {
                 // TODO: native folder dialog
             }
             if (ImGui::MenuItem("New Animation")) {
-                // TODO: create new animation
+                sceneGraph_.clear();
+                undoSystem_.clear();
+                currentProject_ = std::make_shared<AnimProject>();
+                currentFilePath_.clear();
+                nodeTreePanel_.setSelectedNode("");
+                propertyPanel_.setNode(nullptr);
             }
             if (ImGui::MenuItem("Save")) {
                 // TODO: save current project
+            }
+            ImGui::EndMenu();
+        }
+        if (ImGui::BeginMenu("Edit")) {
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, undoSystem_.canUndo())) {
+                undoSystem_.undo();
+            }
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, undoSystem_.canRedo())) {
+                undoSystem_.redo();
             }
             ImGui::EndMenu();
         }
