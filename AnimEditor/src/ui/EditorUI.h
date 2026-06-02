@@ -4,6 +4,7 @@
 #include "ui/PreviewCanvas.h"
 #include "ui/PropertyPanel.h"
 #include "ui/TimelinePanel.h"
+#include "debug/DebugHost.h"
 #include "core/AnimData.h"
 #include "core/SceneGraph.h"
 #include "core/UndoSystem.h"
@@ -27,12 +28,18 @@ public:
     bool wantsToQuit() const { return wantsToQuit_; }
     void showConfirmDiscard();
 
+    template<typename T, typename... Args>
+    void registerDebugPanel(Args&&... args) {
+        debugHost_.registerPanel(std::make_unique<T>(std::forward<Args>(args)...));
+    }
+
 private:
     FileBrowserPanel fileBrowser_;
     NodeTreePanel nodeTreePanel_;
     PreviewCanvas previewCanvas_;
     PropertyPanel propertyPanel_;
     TimelinePanel timelinePanel_;
+    DebugHost debugHost_;
     SceneGraph sceneGraph_;
     UndoSystem undoSystem_;
     std::shared_ptr<anim::AnimProject> currentProject_;

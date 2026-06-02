@@ -195,6 +195,7 @@ void EditorUI::render() {
     propertyPanel_.render();
     nodeTreePanel_.render();
     timelinePanel_.render();
+    debugHost_.renderPanels();
 }
 
 void EditorUI::showConfirmDiscard() {
@@ -311,6 +312,7 @@ void EditorUI::renderMenuBar() {
             }
             ImGui::EndMenu();
         }
+        debugHost_.renderMenu();
         ImGui::EndMainMenuBar();
     }
 }
