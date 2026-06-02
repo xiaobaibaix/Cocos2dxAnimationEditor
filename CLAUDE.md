@@ -1,5 +1,18 @@
 # CLAUDE.md
 
+## Current Module: nodetree
+
+**Branch**: `feature/nodetree`
+**Role**: Node tree view + property editing
+**Owns**: `src/ui/NodeTreePanel.*`, `src/ui/PropertyPanel.*`
+**Do NOT touch**: `src/core/`, `src/ui/EditorUI.*`, `src/ui/FileBrowser*`, `src/ui/Timeline*`, `src/ui/Preview*`, `src/renderer/`
+
+### Tasks
+- [ ] Add NodetreeDebugPanel — inject test node trees, property change logging
+- [ ] Node drag-and-drop reordering in tree
+- [ ] Multi-select and batch property edit
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Rules (MUST FOLLOW)
