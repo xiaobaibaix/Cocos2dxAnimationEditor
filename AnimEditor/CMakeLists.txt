@@ -28,6 +28,7 @@ add_executable(anim_editor
     src/ui/PropertyPanel.cpp
     src/ui/EditorUI.cpp
     src/ui/TimelinePanel.cpp
+    src/platform/NativeDialogs.mm
     ${IMGUI_SOURCES}
 )
 
@@ -40,10 +41,11 @@ target_include_directories(anim_editor PRIVATE
 
 target_link_libraries(anim_editor PRIVATE glfw)
 
-# macOS requires the OpenGL framework
+# macOS requires the OpenGL and AppKit frameworks
 if(APPLE)
     find_library(OPENGL_FRAMEWORK OpenGL REQUIRED)
-    target_link_libraries(anim_editor PRIVATE ${OPENGL_FRAMEWORK})
+    find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
+    target_link_libraries(anim_editor PRIVATE ${OPENGL_FRAMEWORK} ${APPKIT_FRAMEWORK})
 endif()
 
 add_subdirectory(tests)

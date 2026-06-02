@@ -1,12 +1,73 @@
 #include "ui/EditorUI.h"
 #include "core/Serializer.h"
+#include "platform/NativeDialogs.h"
 #include "imgui.h"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cstdlib>
+#include <fstream>
+#include <sys/stat.h>
 
 namespace anim {
 
+// ── Recent files persistence ───────────────────────────────────────────
+
+std::string EditorUI::recentFilesPath() {
+    const char* home = getenv("HOME");
+    if (!home) return ".AnimEditor/recent.json";
+    std::string dir = std::string(home) + "/.AnimEditor";
+    mkdir(dir.c_str(), 0755);
+    return dir + "/recent.json";
+}
+
+void EditorUI::loadRecentFiles() {
+    recentFiles_.clear();
+    std::ifstream in(recentFilesPath());
+    if (!in.is_open()) return;
+
+    try {
+        auto json = nlohmann::json::parse(in);
+        if (json.is_array()) {
+            for (const auto& entry : json) {
+                if (entry.is_string() && recentFiles_.size() < kMaxRecentFiles) {
+                    recentFiles_.push_back(entry.get<std::string>());
+                }
+            }
+        }
+    } catch (...) {
+        recentFiles_.clear();
+    }
+}
+
+void EditorUI::saveRecentFiles() {
+    nlohmann::json json = nlohmann::json::array();
+    for (const auto& path : recentFiles_) {
+        json.push_back(path);
+    }
+    std::ofstream out(recentFilesPath());
+    if (out.is_open()) {
+        out << json.dump(2);
+    }
+}
+
+void EditorUI::addRecentFile(const std::string& path) {
+    auto it = std::find(recentFiles_.begin(), recentFiles_.end(), path);
+    if (it != recentFiles_.end()) {
+        recentFiles_.erase(it);
+    }
+    recentFiles_.insert(recentFiles_.begin(), path);
+    if (recentFiles_.size() > kMaxRecentFiles) {
+        recentFiles_.resize(kMaxRecentFiles);
+    }
+    saveRecentFiles();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+
 bool EditorUI::init() {
+    loadRecentFiles();
+
     fileBrowser_.setOnFileOpen([this](const std::string& path) {
         if (path.size() >= 5 &&
             path.compare(path.size() - 5, 5, ".anim") == 0) {
@@ -41,9 +102,7 @@ bool EditorUI::init() {
         markDirty();
     });
 
-    // Timeline panel callbacks
     timelinePanel_.setOnTimeChanged([this](float time) {
-        // Time is already updated inside TimelinePanel via slider/buttons
     });
 
     timelinePanel_.setOnKeyframeAdded([this](const std::string& nodeId, const std::string& property) {
@@ -160,20 +219,56 @@ void EditorUI::renderMenuBar() {
             if (ImGui::MenuItem("Save", "Ctrl+S")) {
                 doSave();
             }
-            if (ImGui::MenuItem("Save As...")) {
-                showSaveAsPopup_ = true;
-                popupTextBuf_[0] = '\0';
+            if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S")) {
+                std::string path = nativeSaveDialog("untitled.anim");
+                if (!path.empty()) {
+                    saveAs(path);
+                    addRecentFile(path);
+                }
             }
-            if (ImGui::MenuItem("Open .anim...")) {
+            if (ImGui::MenuItem("Open .anim...", "Ctrl+O")) {
                 if (dirty_) {
                     pendingAction_ = PendingAction::OpenAnim;
                     pendingOpenPath_.clear();
                     showConfirmDiscard_ = true;
                 } else {
-                    showOpenPopup_ = true;
-                    popupTextBuf_[0] = '\0';
+                    std::string path = nativeOpenDialog();
+                    if (!path.empty()) {
+                        doOpenAnimFile(path);
+                        addRecentFile(path);
+                    }
                 }
             }
+            ImGui::Separator();
+
+            // Recent files
+            if (!recentFiles_.empty()) {
+                ImGui::TextDisabled("Recent Files");
+                int removeIdx = -1;
+                for (size_t i = 0; i < recentFiles_.size(); ++i) {
+                    std::string label = std::to_string(i + 1) + ". " + recentFiles_[i];
+                    if (ImGui::MenuItem(label.c_str())) {
+                        struct stat st;
+                        if (stat(recentFiles_[i].c_str(), &st) == 0) {
+                            if (dirty_) {
+                                pendingAction_ = PendingAction::OpenAnim;
+                                pendingOpenPath_ = recentFiles_[i];
+                                showConfirmDiscard_ = true;
+                            } else {
+                                doOpenAnimFile(recentFiles_[i]);
+                                addRecentFile(recentFiles_[i]);
+                            }
+                        } else {
+                            removeIdx = static_cast<int>(i);
+                        }
+                    }
+                }
+                if (removeIdx >= 0) {
+                    recentFiles_.erase(recentFiles_.begin() + removeIdx);
+                    saveRecentFiles();
+                }
+            }
+
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Animation")) {
@@ -233,16 +328,19 @@ void EditorUI::renderPopups() {
         if (ImGui::Button("Save", ImVec2(100, 0))) {
             doSave();
             ImGui::CloseCurrentPopup();
-            markClean();
-            // Execute pending action
+            // Execute pending action after save
             if (pendingAction_ == PendingAction::NewAnimation) {
                 doNewAnimation();
             } else if (pendingAction_ == PendingAction::OpenAnim) {
                 if (pendingOpenPath_.empty()) {
-                    showOpenPopup_ = true;
-                    popupTextBuf_[0] = '\0';
+                    std::string path = nativeOpenDialog();
+                    if (!path.empty()) {
+                        doOpenAnimFile(path);
+                        addRecentFile(path);
+                    }
                 } else {
                     doOpenAnimFile(pendingOpenPath_);
+                    addRecentFile(pendingOpenPath_);
                 }
             }
             pendingAction_ = PendingAction::None;
@@ -256,13 +354,16 @@ void EditorUI::renderPopups() {
                 doNewAnimation();
             } else if (pendingAction_ == PendingAction::OpenAnim) {
                 if (pendingOpenPath_.empty()) {
-                    showOpenPopup_ = true;
-                    popupTextBuf_[0] = '\0';
+                    std::string path = nativeOpenDialog();
+                    if (!path.empty()) {
+                        doOpenAnimFile(path);
+                        addRecentFile(path);
+                    }
                 } else {
                     doOpenAnimFile(pendingOpenPath_);
+                    addRecentFile(pendingOpenPath_);
                 }
             } else {
-                // Window close discard — signal quit
                 wantsToQuit_ = true;
             }
             pendingAction_ = PendingAction::None;
@@ -307,67 +408,21 @@ void EditorUI::renderPopups() {
         }
         ImGui::EndPopup();
     }
-
-    // Save As popup
-    if (showSaveAsPopup_) {
-        ImGui::OpenPopup("Save As");
-        showSaveAsPopup_ = false;
-    }
-    if (ImGui::BeginPopupModal("Save As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("File path:");
-        bool confirmed = ImGui::InputText("##savePath", popupTextBuf_, sizeof(popupTextBuf_),
-                                          ImGuiInputTextFlags_EnterReturnsTrue);
-        if (ImGui::Button("Save") || confirmed) {
-            if (popupTextBuf_[0] != '\0' && currentProject_) {
-                saveAs(popupTextBuf_);
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-
-    // Open .anim popup
-    if (showOpenPopup_) {
-        ImGui::OpenPopup("Open .anim");
-        showOpenPopup_ = false;
-    }
-    if (ImGui::BeginPopupModal("Open .anim", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("File path:");
-        bool confirmed = ImGui::InputText("##openPath", popupTextBuf_, sizeof(popupTextBuf_),
-                                          ImGuiInputTextFlags_EnterReturnsTrue);
-        if (ImGui::Button("Open") || confirmed) {
-            if (popupTextBuf_[0] != '\0') {
-                if (dirty_) {
-                    pendingAction_ = PendingAction::OpenAnim;
-                    pendingOpenPath_ = popupTextBuf_;
-                    showConfirmDiscard_ = true;
-                } else {
-                    doOpenAnimFile(popupTextBuf_);
-                }
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
 }
 
 void EditorUI::doSave() {
     if (!currentProject_) return;
     if (!currentFilePath_.empty()) {
         Serializer::saveToFile(*currentProject_, currentFilePath_);
+        addRecentFile(currentFilePath_);
         markClean();
     } else {
-        // No file path yet — open Save As popup
-        showSaveAsPopup_ = true;
-        popupTextBuf_[0] = '\0';
+        std::string path = nativeSaveDialog("untitled.anim");
+        if (!path.empty()) {
+            saveAs(path);
+            addRecentFile(path);
+            markClean();
+        }
     }
 }
 

@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace anim {
 
@@ -41,10 +42,16 @@ private:
     bool dirty_ = false;
     bool wantsToQuit_ = false;
 
+    // Recent files
+    std::vector<std::string> recentFiles_;
+    static constexpr size_t kMaxRecentFiles = 10;
+    void loadRecentFiles();
+    void saveRecentFiles();
+    void addRecentFile(const std::string& path);
+    std::string recentFilesPath();
+
     // Popup state
     bool showNewClipPopup_ = false;
-    bool showSaveAsPopup_ = false;
-    bool showOpenPopup_ = false;
     bool showConfirmDiscard_ = false;
     char popupTextBuf_[256] = {};
 
