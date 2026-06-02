@@ -1,5 +1,18 @@
 # CLAUDE.md
 
+## Current Module: animation
+
+**Branch**: `feature/animation`
+**Role**: Animation engine + runtime library
+**Owns**: `src/core/AnimationEngine.*`, `AnimRuntime/`
+**Do NOT touch**: `src/ui/`, `src/renderer/`, `src/core/AnimData.h`, `src/core/SceneGraph*`, `src/core/Serializer*`, `src/core/UndoSystem*`
+
+### Tasks
+- [ ] F6: Playback engine integration — drive AnimationEngine from timeline playhead
+- [ ] F11: AnimRuntime completion — property application, C API, unit tests
+- [ ] Add AnimationDebugPanel — playback controls, evaluation result display, event log
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Rules (MUST FOLLOW)
