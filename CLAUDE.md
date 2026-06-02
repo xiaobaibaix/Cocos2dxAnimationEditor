@@ -1,5 +1,17 @@
 # CLAUDE.md
 
+## Current Module: files
+
+**Branch**: `feature/files`
+**Role**: File system — browse, open, save .anim projects
+**Owns**: `src/ui/FileBrowserPanel.*`, `src/platform/`
+**Do NOT touch**: `src/core/`, `src/ui/EditorUI.*`, `src/ui/NodeTree*`, `src/ui/Property*`, `src/ui/Timeline*`, `src/ui/Preview*`, `src/renderer/`
+
+### Tasks
+- [ ] Add FilesDebugPanel — mock file trees, test native dialogs, recent files stress test
+- [ ] FileBrowserPanel enhancements — sorting, filtering, file preview thumbnails
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Rules (MUST FOLLOW)
