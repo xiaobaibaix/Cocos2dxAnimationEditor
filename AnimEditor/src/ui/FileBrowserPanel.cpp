@@ -188,6 +188,23 @@ void FileBrowserPanel::render() {
         }
 
         ImGui::PopStyleColor();
+
+        // Right-click context menu for files
+        if (!entry.isDirectory && entry.name != "..") {
+            if (ImGui::BeginPopupContextItem(entry.path.c_str())) {
+                if (ImGui::MenuItem("Delete")) {
+                    std::error_code ec;
+                    fs::remove(entry.path, ec);
+                    if (!ec) {
+                        if (onFileDeleted_) {
+                            onFileDeleted_(entry.path);
+                        }
+                        refreshDirectory(currentPath_);
+                    }
+                }
+                ImGui::EndPopup();
+            }
+        }
     }
 
     ImGui::End();

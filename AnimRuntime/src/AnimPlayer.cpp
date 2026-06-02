@@ -133,12 +133,15 @@ float AnimPlayer::evaluateTrack(const Track& track, float time) const {
         return 0.0f;
     }
     if (kfs.size() == 1) {
+        if (auto* v = std::get_if<Vec2>(&kfs[0].value)) return v->x;
         return std::get<float>(kfs[0].value);
     }
     if (time <= kfs.front().time) {
+        if (auto* v = std::get_if<Vec2>(&kfs.front().value)) return v->x;
         return std::get<float>(kfs.front().value);
     }
     if (time >= kfs.back().time) {
+        if (auto* v = std::get_if<Vec2>(&kfs.back().value)) return v->x;
         return std::get<float>(kfs.back().value);
     }
 
@@ -155,14 +158,22 @@ float AnimPlayer::evaluateTrack(const Track& track, float time) const {
     const auto& kf1 = kfs[i + 1];
     const float dt = kf1.time - kf0.time;
     if (std::fabs(dt) < 1e-6f) {
+        if (auto* v = std::get_if<Vec2>(&kf0.value)) return v->x;
         return std::get<float>(kf0.value);
     }
 
     const float t = (time - kf0.time) / dt;
     const float easedT = Easing::apply(kf0.easing, t);
+
+    // Vec2 lerp
+    if (auto* v0v = std::get_if<Vec2>(&kf0.value)) {
+        if (auto* v1v = std::get_if<Vec2>(&kf1.value)) {
+            return v0v->x + (v1v->x - v0v->x) * easedT;
+        }
+    }
+
     const float v0 = std::get<float>(kf0.value);
     const float v1 = std::get<float>(kf1.value);
-
     return v0 + (v1 - v0) * easedT;
 }
 

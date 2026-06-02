@@ -39,7 +39,7 @@ struct Node {
     std::vector<NodePtr> children;
 };
 
-using KeyframeValue = std::variant<float, int, bool, std::string>;
+using KeyframeValue = std::variant<float, int, bool, std::string, Vec2>;
 
 struct Keyframe {
     float time = 0.0f;
