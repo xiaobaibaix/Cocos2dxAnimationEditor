@@ -41,11 +41,11 @@ private:
     char clipNameBuf_[256] = {};
     bool renameMode_ = false;
 
-    void renderTimeRuler(float duration);
+    void renderTimeRuler(float duration, float contentWidth);
     void renderTransportControls(Animation* anim);
-    void renderTrackRow(const Track& track, float duration);
+    void renderTrackRow(const Track& track, float duration, float contentWidth);
     void renderPotentialTrack(const std::string& nodeId, const std::string& property,
-                              float duration);
+                              float duration, float contentWidth);
     bool hasTrackFor(const Animation* anim, const std::string& nodeId,
                      const std::string& property) const;
     std::vector<std::string> getPropertyNames(const std::string& nodeId) const;
