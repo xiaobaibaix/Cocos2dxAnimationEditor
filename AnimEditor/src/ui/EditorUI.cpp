@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <sys/stat.h>
 
@@ -64,10 +65,41 @@ void EditorUI::addRecentFile(const std::string& path) {
     saveRecentFiles();
 }
 
+// ── Workspace persistence ──────────────────────────────────────────────
+
+static std::string workspaceConfigPath() {
+    const char* home = getenv("HOME");
+    if (!home) return ".AnimEditor/workspace";
+    std::string dir = std::string(home) + "/.AnimEditor";
+    mkdir(dir.c_str(), 0755);
+    return dir + "/workspace";
+}
+
+void EditorUI::loadWorkspacePath() {
+    std::ifstream in(workspaceConfigPath());
+    if (!in.is_open()) return;
+    std::string path;
+    if (std::getline(in, path)) {
+        struct stat st;
+        if (!path.empty() && stat(path.c_str(), &st) == 0 && (st.st_mode & S_IFDIR)) {
+            workspacePath_ = path;
+            fileBrowser_.setRootPath(path);
+        }
+    }
+}
+
+void EditorUI::saveWorkspacePath() {
+    std::ofstream out(workspaceConfigPath());
+    if (out.is_open()) {
+        out << workspacePath_;
+    }
+}
+
 // ── Init ───────────────────────────────────────────────────────────────
 
 bool EditorUI::init() {
     loadRecentFiles();
+    loadWorkspacePath();
 
     fileBrowser_.setOnFileOpen([this](const std::string& path) {
         if (path.size() >= 5 &&
@@ -209,9 +241,14 @@ void EditorUI::renderMenuBar() {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Open Folder...")) {
-                // TODO: native folder dialog
+                std::string folder = nativeFolderDialog();
+                if (!folder.empty()) {
+                    workspacePath_ = folder;
+                    fileBrowser_.setRootPath(folder);
+                    saveWorkspacePath();
+                }
             }
-            if (ImGui::MenuItem("New Animation")) {
+            if (ImGui::MenuItem("New Animation", nullptr, false, !workspacePath_.empty())) {
                 if (dirty_) {
                     pendingAction_ = PendingAction::NewAnimation;
                     showConfirmDiscard_ = true;
@@ -443,7 +480,23 @@ void EditorUI::doNewAnimation() {
     defaultAnim.loop = false;
     currentProject_->animations.push_back(std::move(defaultAnim));
 
+    auto defaultNode = std::make_shared<Node>();
+    defaultNode->id = "node_1";
+    defaultNode->type = NodeType::Node;
+    defaultNode->name = "Node";
+    currentProject_->nodeTree.push_back(defaultNode);
+
     syncProjectToUI();
+
+    if (!workspacePath_.empty()) {
+        std::string path = nativeSaveDialog("untitled.anim", workspacePath_);
+        if (!path.empty()) {
+            saveAs(path);
+            addRecentFile(path);
+            fileBrowser_.setRootPath(workspacePath_);
+        }
+    }
+
     markClean();
 }
 
@@ -452,6 +505,12 @@ void EditorUI::doOpenAnimFile(const std::string& filePath) {
     if (project) {
         currentProject_ = std::make_shared<AnimProject>(std::move(*project));
         currentFilePath_ = filePath;
+
+        std::string parentDir = std::filesystem::path(filePath).parent_path().string();
+        workspacePath_ = parentDir;
+        fileBrowser_.setRootPath(parentDir);
+        saveWorkspacePath();
+
         syncProjectToUI();
         markClean();
     }

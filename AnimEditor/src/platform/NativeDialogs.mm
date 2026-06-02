@@ -51,6 +51,49 @@ std::string nativeOpenDialog() {
     }
 }
 
+std::string nativeSaveDialog(const std::string& defaultName, const std::string& directory) {
+    @autoreleasepool {
+        NSSavePanel* panel = [NSSavePanel savePanel];
+
+        if (!defaultName.empty()) {
+            panel.nameFieldStringValue =
+                [NSString stringWithUTF8String:defaultName.c_str()];
+        }
+        if (!directory.empty()) {
+            panel.directoryURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:directory.c_str()]];
+        }
+
+        panel.allowedFileTypes = @[@"anim"];
+        panel.allowsOtherFileTypes = NO;
+        panel.title = @"Save Animation";
+
+        if ([panel runModal] == NSModalResponseOK) {
+            NSURL* url = panel.URL;
+            return std::string([url.path UTF8String]);
+        }
+        return {};
+    }
+}
+
+std::string nativeFolderDialog() {
+    @autoreleasepool {
+        NSOpenPanel* panel = [NSOpenPanel openPanel];
+
+        panel.canChooseFiles = NO;
+        panel.canChooseDirectories = YES;
+        panel.allowsMultipleSelection = NO;
+        panel.title = @"Open Workspace Folder";
+        panel.message = @"Select a workspace folder for your animation project.";
+        panel.prompt = @"Select Folder";
+
+        if ([panel runModal] == NSModalResponseOK) {
+            NSURL* url = panel.URLs.firstObject;
+            return std::string([url.path UTF8String]);
+        }
+        return {};
+    }
+}
+
 } // namespace anim
 
 #pragma clang diagnostic pop

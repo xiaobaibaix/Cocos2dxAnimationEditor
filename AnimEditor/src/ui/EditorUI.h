@@ -44,6 +44,7 @@ private:
     UndoSystem undoSystem_;
     std::shared_ptr<anim::AnimProject> currentProject_;
     std::string currentFilePath_;
+    std::string workspacePath_;
 
     // Dirty flag
     bool dirty_ = false;
@@ -56,6 +57,10 @@ private:
     void saveRecentFiles();
     void addRecentFile(const std::string& path);
     std::string recentFilesPath();
+
+    // Workspace persistence
+    void loadWorkspacePath();
+    void saveWorkspacePath();
 
     // Popup state
     bool showNewClipPopup_ = false;
