@@ -1,5 +1,18 @@
 # CLAUDE.md
 
+## Current Module: preview
+
+**Branch**: `feature/preview`
+**Role**: Preview canvas + OpenGL FBO rendering
+**Owns**: `src/ui/PreviewCanvas.*`, `src/renderer/`
+**Do NOT touch**: `src/core/`, `src/ui/EditorUI.*`, `src/ui/FileBrowser*`, `src/ui/NodeTree*`, `src/ui/Property*`, `src/ui/Timeline*`
+
+### Tasks
+- [ ] F5: Scene node rendering — iterate node tree, draw colored rects per node
+- [ ] F7: Canvas hit-testing, selection, pan/zoom
+- [ ] Add PreviewDebugPanel — render mode toggle, FBO info, inject test nodes
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Rules (MUST FOLLOW)
