@@ -8,7 +8,7 @@ namespace anim {
 class TimelinePanel {
 public:
     using OnTimeChanged = std::function<void(float time)>;
-    using OnKeyframeAdded = std::function<void(const std::string& nodeId, const std::string& property)>;
+    using OnKeyframeAdded = std::function<void(const std::string& nodeId, const std::string& property, float time)>;
     using OnKeyframeRemoved = std::function<void(const std::string& nodeId, const std::string& property, int index)>;
     using OnKeyframeChanged = std::function<void(const std::string& nodeId, const std::string& property,
                                                   int index, float newTime)>;

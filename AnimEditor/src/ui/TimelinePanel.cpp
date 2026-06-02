@@ -152,6 +152,27 @@ void TimelinePanel::render() {
         return;
     }
 
+    // Space bar toggles play/pause
+    if (ImGui::IsKeyPressed(ImGuiKey_Space) && ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
+        isPlaying_ = !isPlaying_;
+        if (isPlaying_ && currentTime_ >= anim->duration) {
+            currentTime_ = 0.0f;
+        }
+    }
+
+    if (isPlaying_) {
+        currentTime_ += ImGui::GetIO().DeltaTime;
+        if (currentTime_ >= anim->duration) {
+            if (anim->loop) {
+                currentTime_ = std::fmod(currentTime_, anim->duration);
+            } else {
+                currentTime_ = anim->duration;
+                isPlaying_ = false;
+            }
+        }
+        if (onTimeChanged_) onTimeChanged_(currentTime_);
+    }
+
     renderTransportControls(anim);
     ImGui::Separator();
 
@@ -179,6 +200,7 @@ void TimelinePanel::render() {
     renderTimeRuler(anim->duration, contentWidth);
 
     for (auto& track : anim->tracks) {
+        if (!selectedNodeId_.empty() && track.nodeId != selectedNodeId_) continue;
         renderTrackRow(track, anim->duration, contentWidth);
     }
 
@@ -230,7 +252,7 @@ void TimelinePanel::render() {
                                 anyAvailable = true;
                                 if (ImGui::MenuItem(group.c_str())) {
                                     if (onKeyframeAdded_) {
-                                        onKeyframeAdded_(selectedNodeId_, group);
+                                        onKeyframeAdded_(selectedNodeId_, group, currentTime_);
                                     }
                                     ImGui::CloseCurrentPopup();
                                 }
@@ -242,7 +264,7 @@ void TimelinePanel::render() {
                                 for (const auto& sub : subs) {
                                     std::string prop = group + "." + sub;
                                     if (onKeyframeAdded_) {
-                                        onKeyframeAdded_(selectedNodeId_, prop);
+                                        onKeyframeAdded_(selectedNodeId_, prop, currentTime_);
                                     }
                                 }
                                 ImGui::CloseCurrentPopup();
@@ -261,9 +283,11 @@ void TimelinePanel::render() {
         ImGui::EndChild();
     }
 
-    if (anim->tracks.empty() && selectedNodeId_.empty()) {
-        ImGui::TextDisabled("No tracks. Select a node in the Nodes panel first.");
-    } else if (anim->tracks.empty() && !selectedNodeId_.empty()) {
+    if (selectedNodeId_.empty()) {
+        ImGui::TextDisabled("Select a node in the Nodes panel to edit its animation.");
+    } else if (anim->tracks.empty()) {
+        ImGui::TextDisabled("No tracks for this node. Right-click below to add properties.");
+    } else {
         ImGui::TextDisabled("Right-click the row above to add an animatable property.");
     }
 
@@ -315,6 +339,17 @@ void TimelinePanel::renderTimeRuler(float duration, float contentWidth) {
         ImVec2(cursorX, pMin.y + regionHeight),
         IM_COL32(255, 60, 60, 220), 2.0f);
 
+    // Click/drag to seek
+    ImGui::SetCursorScreenPos(pMin);
+    ImGui::InvisibleButton("##rulerSeek", ImVec2(contentWidth, regionHeight));
+    if (ImGui::IsItemActive()) {
+        float mouseX = ImGui::GetIO().MousePos.x;
+        float newTime = (mouseX - pMin.x) / pixelsPerSecond_;
+        newTime = std::clamp(newTime, 0.0f, duration);
+        currentTime_ = newTime;
+        if (onTimeChanged_) onTimeChanged_(currentTime_);
+    }
+
     ImGui::EndChild();
 }
 
@@ -325,6 +360,9 @@ void TimelinePanel::renderTransportControls(Animation* anim) {
         }
     } else {
         if (ImGui::Button("Play")) {
+            if (currentTime_ >= anim->duration) {
+                currentTime_ = 0.0f;
+            }
             isPlaying_ = true;
         }
     }
@@ -341,14 +379,37 @@ void TimelinePanel::renderTransportControls(Animation* anim) {
 
     ImGui::SameLine();
 
-    char timeLabel[64];
-    snprintf(timeLabel, sizeof(timeLabel), "%.2f / %.2f", currentTime_, anim->duration);
-    ImGui::Text("%s", timeLabel);
+    bool wasLoop = anim->loop;
+    if (wasLoop) {
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.3f, 0.7f, 0.3f, 0.6f));
+    }
+    if (ImGui::Button(wasLoop ? "Loop ON" : "Loop OFF")) {
+        anim->loop = !anim->loop;
+    }
+    if (wasLoop) {
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::SameLine();
+
+    ImGui::Text("%.2f /", currentTime_);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(90.0f);
+    float prevDuration = anim->duration;
+    if (ImGui::InputFloat("##duration", &anim->duration, 0.1f, 1.0f, "%.2f")) {
+        if (anim->duration < 0.1f) anim->duration = 0.1f;
+        if (currentTime_ > anim->duration) {
+            currentTime_ = anim->duration;
+            if (onTimeChanged_) onTimeChanged_(currentTime_);
+        }
+    }
 
     ImGui::SameLine();
 
     float prevTime = currentTime_;
-    ImGui::SetNextItemWidth(200.0f);
+    float sliderWidth = ImGui::GetContentRegionAvail().x - 200.0f;
+    if (sliderWidth < 80.0f) sliderWidth = 80.0f;
+    ImGui::SetNextItemWidth(sliderWidth);
     ImGui::SliderFloat("##time", &currentTime_, 0.0f, anim->duration, "%.2f s");
     if (currentTime_ != prevTime) {
         if (onTimeChanged_) {
@@ -418,7 +479,7 @@ void TimelinePanel::renderTrackRow(Track& track, float duration, float contentWi
             snprintf(buf, sizeof(buf), "Add Keyframe at %.2fs", contextClickTime_);
             if (ImGui::MenuItem(buf)) {
                 if (onKeyframeAdded_) {
-                    onKeyframeAdded_(track.nodeId, track.property);
+                    onKeyframeAdded_(track.nodeId, track.property, contextClickTime_);
                 }
                 ImGui::CloseCurrentPopup();
             }
@@ -449,23 +510,17 @@ void TimelinePanel::renderTrackRow(Track& track, float duration, float contentWi
 
     // Draw keyframe diamonds
     float baseDiamondSize = 6.0f;
-    float hitArea = 12.0f;  // generous hit target for easy dragging
+    float hitRadius = 12.0f;
+    ImVec2 mousePos = ImGui::GetIO().MousePos;
 
     for (int i = 0; i < static_cast<int>(track.keyframes.size()); ++i) {
         const auto& kf = track.keyframes[i];
         float x = pMin.x + kf.time * pixelsPerSecond_;
         float y = pMin.y + regionHeight * 0.5f;
 
-        // Invisible button for hit testing — placed first, before drawing
-        ImVec2 kfTopLeft(x - hitArea, y - hitArea);
-        ImVec2 kfBotRight(x + hitArea, y + hitArea);
-        ImGui::SetCursorScreenPos(kfTopLeft);
-
-        std::string kfId = "##kf_" + track.nodeId + "_" + track.property + "_" + std::to_string(i);
-        ImGui::InvisibleButton(kfId.c_str(), ImVec2(hitArea * 2, hitArea * 2));
-
-        bool isHovered = ImGui::IsItemHovered();
-        bool isActive = ImGui::IsItemActive();
+        bool isHovered = !draggingKeyframe_ &&
+                         std::fabs(mousePos.x - x) <= hitRadius &&
+                         std::fabs(mousePos.y - y) <= hitRadius;
 
         // Draw diamond — enlarge on hover
         float ds = isHovered ? baseDiamondSize * 1.5f : baseDiamondSize;
@@ -485,8 +540,8 @@ void TimelinePanel::renderTrackRow(Track& track, float duration, float contentWi
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
         }
 
-        // Keyframe right-click → open context menu
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        // Right-click → context menu
+        if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
             contextMenuType_ = 2;
             contextNodeId_ = track.nodeId;
             contextProperty_ = track.property;
@@ -494,8 +549,8 @@ void TimelinePanel::renderTrackRow(Track& track, float duration, float contentWi
             ImGui::OpenPopup("##KeyframeCtxMenu");
         }
 
-        // Drag keyframe — use IsItemActive for responsive dragging
-        if (ImGui::IsItemActivated()) {
+        // Left-click → start drag
+        if (isHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             draggingKeyframe_ = true;
             dragTrackNodeId_ = track.nodeId;
             dragTrackProperty_ = track.property;
@@ -531,15 +586,14 @@ void TimelinePanel::renderTrackRow(Track& track, float duration, float contentWi
     if (draggingKeyframe_ &&
         dragTrackNodeId_ == track.nodeId &&
         dragTrackProperty_ == track.property) {
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-            float deltaX = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left).x;
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            float deltaX = mousePos.x - (pMin.x + dragStartTime_ * pixelsPerSecond_);
             float newTime = dragStartTime_ + deltaX / pixelsPerSecond_;
             newTime = std::clamp(newTime, 0.0f, duration);
             track.keyframes[dragKeyframeIndex_].time = newTime;
         }
         if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
             if (onKeyframeChanged_ &&
-                draggingKeyframe_ &&
                 track.keyframes[dragKeyframeIndex_].time != dragStartTime_) {
                 onKeyframeChanged_(dragTrackNodeId_, dragTrackProperty_,
                                    dragKeyframeIndex_,
@@ -590,7 +644,7 @@ void TimelinePanel::renderTrackRow(Track& track, float duration, float contentWi
             editKeyframeIndex_ < static_cast<int>(track.keyframes.size())) {
             ImGui::Text("Edit Keyframe — %s.%s", track.nodeId.c_str(), track.property.c_str());
             ImGui::Separator();
-            ImGui::Text("Time: %.2fs", editKeyframeTime_);
+            ImGui::InputFloat("Time", &editKeyframeTime_, 0.05f, 0.5f, "%.3f s");
             bool isVec2 = std::get_if<Vec2>(&track.keyframes[editKeyframeIndex_].value) != nullptr;
             if (isVec2) {
                 ImGui::InputFloat("X", &editKeyframeVec2_.x, 0.1f, 1.0f, "%.3f");
@@ -602,10 +656,12 @@ void TimelinePanel::renderTrackRow(Track& track, float duration, float contentWi
             }
             ImGui::Separator();
             if (ImGui::Button("OK")) {
+                auto& kf = track.keyframes[editKeyframeIndex_];
+                kf.time = std::clamp(editKeyframeTime_, 0.0f, duration);
                 if (isVec2) {
-                    track.keyframes[editKeyframeIndex_].value = editKeyframeVec2_;
+                    kf.value = editKeyframeVec2_;
                 } else {
-                    track.keyframes[editKeyframeIndex_].value = editKeyframeVec2_.x;
+                    kf.value = editKeyframeVec2_.x;
                 }
                 if (onKeyframeValueChanged_) {
                     onKeyframeValueChanged_(editNodeId_, editProperty_,

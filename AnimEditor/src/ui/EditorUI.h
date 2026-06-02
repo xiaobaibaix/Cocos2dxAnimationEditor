@@ -6,6 +6,7 @@
 #include "ui/TimelinePanel.h"
 #include "debug/DebugHost.h"
 #include "core/AnimData.h"
+#include "core/AnimationEngine.h"
 #include "core/SceneGraph.h"
 #include "core/UndoSystem.h"
 #include <functional>
@@ -74,6 +75,9 @@ private:
 
     void markDirty() { dirty_ = true; }
     void markClean() { dirty_ = false; }
+
+    AnimationEngine animationEngine_;
+    void applyAnimationToNode();
 
     void renderMenuBar();
     void renderPopups();

@@ -1,4 +1,5 @@
 #include "ui/EditorUI.h"
+#include "core/Easing.h"
 #include "debug/DemoDebugPanel.h"
 #include "core/Serializer.h"
 #include "platform/NativeDialogs.h"
@@ -135,10 +136,11 @@ bool EditorUI::init() {
         markDirty();
     });
 
-    timelinePanel_.setOnTimeChanged([this](float time) {
+    timelinePanel_.setOnTimeChanged([this](float /*time*/) {
+        applyAnimationToNode();
     });
 
-    timelinePanel_.setOnKeyframeAdded([this](const std::string& nodeId, const std::string& property) {
+    timelinePanel_.setOnKeyframeAdded([this](const std::string& nodeId, const std::string& property, float time) {
         if (!currentProject_ || currentProject_->animations.empty()) return;
 
         std::string currentAnimName = timelinePanel_.getCurrentAnimationName();
@@ -163,7 +165,6 @@ bool EditorUI::init() {
             markDirty();
             return;
         }
-        float time = timelinePanel_.getCurrentTime();
         bool isVec2 = (property == "position" || property == "scale" || property == "anchor");
         if (isVec2) {
             targetTrack->keyframes.push_back(Keyframe{time, Vec2{0.0f, 0.0f}, EasingType::Linear});
@@ -220,6 +221,7 @@ bool EditorUI::init() {
                               [](const Keyframe& a, const Keyframe& b) { return a.time < b.time; });
                 }
                 markDirty();
+                applyAnimationToNode();
                 return;
             }
         }
@@ -249,6 +251,7 @@ bool EditorUI::init() {
                     }
                 }
                 markDirty();
+                applyAnimationToNode();
                 return;
             }
         }
@@ -619,6 +622,68 @@ void EditorUI::openAnimFile(const std::string& filePath) {
         showConfirmDiscard_ = true;
     } else {
         doOpenAnimFile(filePath);
+    }
+}
+
+void EditorUI::applyAnimationToNode() {
+    if (!currentProject_ || currentProject_->animations.empty()) return;
+    std::string nodeId = nodeTreePanel_.getSelectedNode();
+    if (nodeId.empty()) return;
+    auto nodeOpt = sceneGraph_.findById(nodeId);
+    if (!nodeOpt) return;
+    auto& node = *nodeOpt;
+
+    std::string animName = timelinePanel_.getCurrentAnimationName();
+    Animation* anim = nullptr;
+    for (auto& a : currentProject_->animations) {
+        if (a.name == animName) { anim = &a; break; }
+    }
+    if (!anim) return;
+
+    float time = timelinePanel_.getCurrentTime();
+
+    for (const auto& track : anim->tracks) {
+        if (track.nodeId != nodeId || track.keyframes.empty()) continue;
+
+        // Evaluate interpolated Vec2 or float at current time
+        const auto& kfs = track.keyframes;
+        Vec2 val2{0.0f, 0.0f};
+        float val1 = 0.0f;
+        bool isVec2 = std::get_if<Vec2>(&kfs[0].value) != nullptr;
+
+        if (kfs.size() == 1) {
+            if (isVec2) val2 = std::get<Vec2>(kfs[0].value);
+            else val1 = std::get<float>(kfs[0].value);
+        } else {
+            float t = std::clamp(time, kfs.front().time, kfs.back().time);
+            size_t i = 0;
+            for (size_t j = 0; j + 1 < kfs.size(); ++j) {
+                if (t >= kfs[j].time && t <= kfs[j + 1].time) { i = j; break; }
+            }
+            float dt = kfs[i + 1].time - kfs[i].time;
+            float frac = dt > 1e-6f ? (t - kfs[i].time) / dt : 0.0f;
+            frac = Easing::apply(kfs[i].easing, frac);
+
+            if (isVec2) {
+                auto v0 = std::get<Vec2>(kfs[i].value);
+                auto v1 = std::get<Vec2>(kfs[i + 1].value);
+                val2.x = v0.x + (v1.x - v0.x) * frac;
+                val2.y = v0.y + (v1.y - v0.y) * frac;
+            } else {
+                float v0 = std::get<float>(kfs[i].value);
+                float v1 = std::get<float>(kfs[i + 1].value);
+                val1 = v0 + (v1 - v0) * frac;
+            }
+        }
+
+        // Apply to node property
+        const auto& prop = track.property;
+        if (prop == "position") node->properties.position = val2;
+        else if (prop == "scale") node->properties.scale = val2;
+        else if (prop == "anchor") node->properties.anchor = val2;
+        else if (prop == "rotation") node->properties.rotation = val1;
+        else if (prop == "opacity") node->properties.opacity = static_cast<uint8_t>(std::clamp(val1, 0.0f, 255.0f));
+        else if (prop == "visible") node->properties.visible = (val1 > 0.5f);
     }
 }
 
