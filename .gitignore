@@ -1,6 +1,8 @@
 build/
 .superpowers/
+.claude/
 .DS_Store
+imgui.ini
 *.o
 *.a
 *.dylib
