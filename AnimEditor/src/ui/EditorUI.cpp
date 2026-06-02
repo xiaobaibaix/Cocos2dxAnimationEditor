@@ -1,12 +1,73 @@
 #include "ui/EditorUI.h"
 #include "core/Serializer.h"
+#include "platform/NativeDialogs.h"
 #include "imgui.h"
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <cstdlib>
+#include <fstream>
+#include <sys/stat.h>
 
 namespace anim {
 
+// ── Recent files persistence ───────────────────────────────────────────
+
+std::string EditorUI::recentFilesPath() {
+    const char* home = getenv("HOME");
+    if (!home) return ".AnimEditor/recent.json";
+    std::string dir = std::string(home) + "/.AnimEditor";
+    mkdir(dir.c_str(), 0755);
+    return dir + "/recent.json";
+}
+
+void EditorUI::loadRecentFiles() {
+    recentFiles_.clear();
+    std::ifstream in(recentFilesPath());
+    if (!in.is_open()) return;
+
+    try {
+        auto json = nlohmann::json::parse(in);
+        if (json.is_array()) {
+            for (const auto& entry : json) {
+                if (entry.is_string() && recentFiles_.size() < kMaxRecentFiles) {
+                    recentFiles_.push_back(entry.get<std::string>());
+                }
+            }
+        }
+    } catch (...) {
+        recentFiles_.clear();
+    }
+}
+
+void EditorUI::saveRecentFiles() {
+    nlohmann::json json = nlohmann::json::array();
+    for (const auto& path : recentFiles_) {
+        json.push_back(path);
+    }
+    std::ofstream out(recentFilesPath());
+    if (out.is_open()) {
+        out << json.dump(2);
+    }
+}
+
+void EditorUI::addRecentFile(const std::string& path) {
+    auto it = std::find(recentFiles_.begin(), recentFiles_.end(), path);
+    if (it != recentFiles_.end()) {
+        recentFiles_.erase(it);
+    }
+    recentFiles_.insert(recentFiles_.begin(), path);
+    if (recentFiles_.size() > kMaxRecentFiles) {
+        recentFiles_.resize(kMaxRecentFiles);
+    }
+    saveRecentFiles();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────
+
 bool EditorUI::init() {
+    loadRecentFiles();
+
     fileBrowser_.setOnFileOpen([this](const std::string& path) {
         if (path.size() >= 5 &&
             path.compare(path.size() - 5, 5, ".anim") == 0) {
@@ -28,19 +89,14 @@ bool EditorUI::init() {
     });
 
     propertyPanel_.setOnPropertyChanged([](const std::string& /*nodeId*/) {
-        // Property changed notification — can trigger auto-save or undo registration later
     });
 
-    // Timeline panel callbacks
     timelinePanel_.setOnTimeChanged([this](float time) {
-        // Update current time — Phase 4 will drive preview via AnimationEngine
-        // Time is already updated inside TimelinePanel via slider/buttons
     });
 
     timelinePanel_.setOnKeyframeAdded([this](const std::string& nodeId, const std::string& property) {
         if (!currentProject_ || currentProject_->animations.empty()) return;
 
-        // Find the currently selected animation clip
         std::string currentAnimName = timelinePanel_.getCurrentAnimationName();
         Animation* anim = nullptr;
         for (auto& a : currentProject_->animations) {
@@ -51,7 +107,6 @@ bool EditorUI::init() {
         }
         if (!anim) return;
 
-        // Find or create track
         Track* targetTrack = nullptr;
         for (auto& t : anim->tracks) {
             if (t.nodeId == nodeId && t.property == property) {
@@ -90,7 +145,6 @@ bool EditorUI::init() {
         }
     });
 
-    // Canvas node dragging — update selected node position
     previewCanvas_.setOnNodeDragged([this](float dx, float dy) {
         const std::string& selectedId = nodeTreePanel_.getSelectedNode();
         if (selectedId.empty()) return;
@@ -102,15 +156,12 @@ bool EditorUI::init() {
         node->properties.position.x += dx;
         node->properties.position.y += dy;
 
-        // Refresh the property panel to reflect new position
         propertyPanel_.setNode(node);
     });
 
     sceneGraph_.setOnChanged([this]() {
-        // Scene graph changed — can trigger auto-save or dirty flag later
     });
 
-    // Initialize preview canvas (renders to FBO, displayed via ImGui texture)
     previewCanvas_.init(800, 600);
 
     return true;
@@ -125,16 +176,9 @@ void EditorUI::render() {
     renderPopups();
     fileBrowser_.render();
 
-    // Preview canvas with FBO-rendered content
     previewCanvas_.render();
-
-    // Properties panel (docked to top-right by DockBuilder)
     propertyPanel_.render();
-
-    // Nodes panel (docked to bottom-left by DockBuilder)
     nodeTreePanel_.render();
-
-    // Timeline panel (docked to bottom-right by DockBuilder)
     timelinePanel_.render();
 }
 
@@ -163,21 +207,54 @@ void EditorUI::renderMenuBar() {
                 if (currentProject_) {
                     if (!currentFilePath_.empty()) {
                         Serializer::saveToFile(*currentProject_, currentFilePath_);
+                        addRecentFile(currentFilePath_);
                     } else {
-                        // No file path yet — open Save As popup
-                        showSaveAsPopup_ = true;
-                        popupTextBuf_[0] = '\0';
+                        std::string path = nativeSaveDialog("untitled.anim");
+                        if (!path.empty()) {
+                            saveAs(path);
+                            addRecentFile(path);
+                        }
                     }
                 }
             }
-            if (ImGui::MenuItem("Save As...")) {
-                showSaveAsPopup_ = true;
-                popupTextBuf_[0] = '\0';
+            if (ImGui::MenuItem("Save As...", "Ctrl+Shift+S")) {
+                std::string path = nativeSaveDialog("untitled.anim");
+                if (!path.empty()) {
+                    saveAs(path);
+                    addRecentFile(path);
+                }
             }
-            if (ImGui::MenuItem("Open .anim...")) {
-                showOpenPopup_ = true;
-                popupTextBuf_[0] = '\0';
+            if (ImGui::MenuItem("Open .anim...", "Ctrl+O")) {
+                std::string path = nativeOpenDialog();
+                if (!path.empty()) {
+                    openAnimFile(path);
+                    addRecentFile(path);
+                }
             }
+            ImGui::Separator();
+
+            // Recent files
+            if (!recentFiles_.empty()) {
+                ImGui::TextDisabled("Recent Files");
+                int removeIdx = -1;
+                for (size_t i = 0; i < recentFiles_.size(); ++i) {
+                    std::string label = std::to_string(i + 1) + ". " + recentFiles_[i];
+                    if (ImGui::MenuItem(label.c_str())) {
+                        struct stat st;
+                        if (stat(recentFiles_[i].c_str(), &st) == 0) {
+                            openAnimFile(recentFiles_[i]);
+                            addRecentFile(recentFiles_[i]);
+                        } else {
+                            removeIdx = static_cast<int>(i);
+                        }
+                    }
+                }
+                if (removeIdx >= 0) {
+                    recentFiles_.erase(recentFiles_.begin() + removeIdx);
+                    saveRecentFiles();
+                }
+            }
+
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Animation")) {
@@ -198,7 +275,6 @@ void EditorUI::renderMenuBar() {
                         currentProject_->animations.erase(eraseIt, currentProject_->animations.end());
                     }
 
-                    // Switch to first remaining clip or clear
                     if (!currentProject_->animations.empty()) {
                         timelinePanel_.setCurrentAnimation(currentProject_->animations.front().name);
                         timelinePanel_.setCurrentTime(0.0f);
@@ -252,64 +328,16 @@ void EditorUI::renderPopups() {
         }
         ImGui::EndPopup();
     }
-
-    // Save As popup
-    if (showSaveAsPopup_) {
-        ImGui::OpenPopup("Save As");
-        showSaveAsPopup_ = false;
-    }
-    if (ImGui::BeginPopupModal("Save As", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("File path:");
-        bool confirmed = ImGui::InputText("##savePath", popupTextBuf_, sizeof(popupTextBuf_),
-                                          ImGuiInputTextFlags_EnterReturnsTrue);
-        if (ImGui::Button("Save") || confirmed) {
-            if (popupTextBuf_[0] != '\0' && currentProject_) {
-                saveAs(popupTextBuf_);
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
-
-    // Open .anim popup
-    if (showOpenPopup_) {
-        ImGui::OpenPopup("Open .anim");
-        showOpenPopup_ = false;
-    }
-    if (ImGui::BeginPopupModal("Open .anim", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::Text("File path:");
-        bool confirmed = ImGui::InputText("##openPath", popupTextBuf_, sizeof(popupTextBuf_),
-                                          ImGuiInputTextFlags_EnterReturnsTrue);
-        if (ImGui::Button("Open") || confirmed) {
-            if (popupTextBuf_[0] != '\0') {
-                openAnimFile(popupTextBuf_);
-            }
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel")) {
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndPopup();
-    }
 }
 
 void EditorUI::syncProjectToUI() {
     if (!currentProject_) return;
 
-    // Rebuild scene graph from project node tree
     sceneGraph_.clear();
     for (const auto& nodePtr : currentProject_->nodeTree) {
-        // Add each root node to the scene graph
         auto added = sceneGraph_.addNode(nodePtr->id, nodePtr->type, nodePtr->name, std::nullopt);
-        // TODO: recursively add children when SceneGraph supports deeper insertion
     }
 
-    // Sync timeline to the first animation clip
     timelinePanel_.setProject(currentProject_.get());
     if (!currentProject_->animations.empty()) {
         timelinePanel_.setCurrentAnimation(currentProject_->animations.front().name);
@@ -319,7 +347,6 @@ void EditorUI::syncProjectToUI() {
     timelinePanel_.setCurrentTime(0.0f);
     timelinePanel_.setSelectedNode("");
 
-    // Reset selection state
     nodeTreePanel_.setSelectedNode("");
     propertyPanel_.setNode(nullptr);
     undoSystem_.clear();

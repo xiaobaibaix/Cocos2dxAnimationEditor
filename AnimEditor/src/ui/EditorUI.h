@@ -9,6 +9,7 @@
 #include "core/UndoSystem.h"
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace anim {
 
@@ -32,10 +33,16 @@ private:
     std::shared_ptr<anim::AnimProject> currentProject_;
     std::string currentFilePath_;
 
+    // Recent files
+    std::vector<std::string> recentFiles_;
+    static constexpr size_t kMaxRecentFiles = 10;
+    void loadRecentFiles();
+    void saveRecentFiles();
+    void addRecentFile(const std::string& path);
+    std::string recentFilesPath();
+
     // Popup state
     bool showNewClipPopup_ = false;
-    bool showSaveAsPopup_ = false;
-    bool showOpenPopup_ = false;
     char popupTextBuf_[256] = {};
 
     void renderMenuBar();
