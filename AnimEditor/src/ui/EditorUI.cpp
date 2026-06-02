@@ -41,16 +41,13 @@ bool EditorUI::init() {
         if (!currentProject_ || currentProject_->animations.empty()) return;
 
         // Find the currently selected animation clip
-        std::string currentAnim = timelinePanel_.isPlaying() ? "" : "";
-        // Get current animation name from the project's last active animation
+        std::string currentAnimName = timelinePanel_.getCurrentAnimationName();
         Animation* anim = nullptr;
         for (auto& a : currentProject_->animations) {
-            // Use the timeline panel's current animation — we find it from the combo
-            anim = &a;
-            break;
-        }
-        if (!anim && !currentProject_->animations.empty()) {
-            anim = &currentProject_->animations.front();
+            if (a.name == currentAnimName) {
+                anim = &a;
+                break;
+            }
         }
         if (!anim) return;
 
@@ -73,7 +70,16 @@ bool EditorUI::init() {
     timelinePanel_.setOnKeyframeRemoved([this](const std::string& nodeId, const std::string& property, int index) {
         if (!currentProject_ || currentProject_->animations.empty()) return;
 
-        Animation* anim = &currentProject_->animations.front();
+        std::string currentAnimName = timelinePanel_.getCurrentAnimationName();
+        Animation* anim = nullptr;
+        for (auto& a : currentProject_->animations) {
+            if (a.name == currentAnimName) {
+                anim = &a;
+                break;
+            }
+        }
+        if (!anim) return;
+
         for (auto& t : anim->tracks) {
             if (t.nodeId == nodeId && t.property == property) {
                 if (index >= 0 && index < static_cast<int>(t.keyframes.size())) {
@@ -122,27 +128,14 @@ void EditorUI::render() {
     // Preview canvas with FBO-rendered content
     previewCanvas_.render();
 
-    // Node Tree + Timeline bottom panel
-    ImGui::Begin("Node Tree + Timeline");
-    float panelWidth = ImGui::GetContentRegionAvail().x;
-    float nodeTreeWidth = panelWidth * 0.35f;
-
-    // Left side: Node Tree
-    ImGui::BeginChild("NodeTreeSide", ImVec2(nodeTreeWidth, 0), true);
-    nodeTreePanel_.render();
-    ImGui::EndChild();
-
-    ImGui::SameLine();
-
-    // Right side: Timeline panel
-    ImGui::BeginChild("TimelineSide", ImVec2(0, 0), true);
-    timelinePanel_.render();
-    ImGui::EndChild();
-
-    ImGui::End();
-
-    // Properties panel
+    // Properties panel (docked to top-right by DockBuilder)
     propertyPanel_.render();
+
+    // Nodes panel (docked to bottom-left by DockBuilder)
+    nodeTreePanel_.render();
+
+    // Timeline panel (docked to bottom-right by DockBuilder)
+    timelinePanel_.render();
 }
 
 void EditorUI::renderMenuBar() {

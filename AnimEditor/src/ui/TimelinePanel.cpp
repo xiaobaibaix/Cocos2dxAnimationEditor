@@ -165,16 +165,76 @@ void TimelinePanel::render() {
     renderTransportControls(anim);
     ImGui::Separator();
 
-    // Track area
+    renderTimeRuler(anim->duration);
+
+    // Track area — existing tracks
     for (auto& track : anim->tracks) {
         renderTrackRow(track, anim->duration);
     }
 
-    if (anim->tracks.empty()) {
-        ImGui::TextDisabled("No tracks. Select a node and double-click to add keyframes.");
+    // Potential tracks for selected node — properties without a track yet
+    if (project_ && !selectedNodeId_.empty()) {
+        for (const auto& prop : getPropertyNames(selectedNodeId_)) {
+            if (!hasTrackFor(anim, selectedNodeId_, prop)) {
+                renderPotentialTrack(selectedNodeId_, prop, anim->duration);
+            }
+        }
+    }
+
+    if (anim->tracks.empty() && selectedNodeId_.empty()) {
+        ImGui::TextDisabled("No tracks. Select a node in the Nodes panel to see its properties here.");
+    } else if (anim->tracks.empty() && !selectedNodeId_.empty()) {
+        ImGui::TextDisabled("Double-click a property row below to add the first keyframe.");
     }
 
     ImGui::End();
+}
+
+void TimelinePanel::renderTimeRuler(float duration) {
+    float rulerHeight = 24.0f;
+
+    ImGui::BeginChild("##timeRuler", ImVec2(0, rulerHeight), true, ImGuiWindowFlags_NoScrollbar);
+
+    ImVec2 pMin = ImGui::GetCursorScreenPos();
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    float regionWidth = ImGui::GetContentRegionAvail().x;
+    float regionHeight = ImGui::GetContentRegionAvail().y;
+
+    drawList->AddRectFilled(pMin, ImVec2(pMin.x + regionWidth, pMin.y + regionHeight),
+                            IM_COL32(35, 35, 45, 255));
+
+    // Adaptive tick spacing based on zoom level
+    float tickStep = 0.1f;
+    while (tickStep * pixelsPerSecond_ < 50.0f) tickStep *= 2.0f;
+    while (tickStep * pixelsPerSecond_ > 150.0f) tickStep /= 2.0f;
+
+    for (float t = 0.0f; t <= duration + 0.0001f; t += tickStep) {
+        float x = pMin.x + t * pixelsPerSecond_;
+        if (x > pMin.x + regionWidth) break;
+
+        bool isMajor = (static_cast<int>(t / tickStep + 0.5f) % 5 == 0);
+        float tickTop = isMajor ? pMin.y + 2.0f : pMin.y + regionHeight * 0.5f;
+
+        drawList->AddLine(
+            ImVec2(x, tickTop),
+            ImVec2(x, pMin.y + regionHeight),
+            IM_COL32(150, 150, 160, 200));
+
+        if (isMajor) {
+            char label[32];
+            snprintf(label, sizeof(label), "%.1fs", t);
+            drawList->AddText(ImVec2(x + 3, pMin.y + 2), IM_COL32(180, 180, 190, 255), label);
+        }
+    }
+
+    // Red time cursor
+    float cursorX = pMin.x + currentTime_ * pixelsPerSecond_;
+    drawList->AddLine(
+        ImVec2(cursorX, pMin.y),
+        ImVec2(cursorX, pMin.y + regionHeight),
+        IM_COL32(255, 60, 60, 220), 2.0f);
+
+    ImGui::EndChild();
 }
 
 void TimelinePanel::renderTransportControls(Animation* anim) {
@@ -261,6 +321,21 @@ void TimelinePanel::renderTrackRow(const Track& track, float duration) {
                                 IM_COL32(60, 55, 30, 80));
     }
 
+    // Hit area for adding keyframes by double-click (before keyframe buttons so they take priority)
+    ImGui::SetCursorScreenPos(pMin);
+    ImGui::InvisibleButton("##track_hitarea", ImVec2(regionWidth, regionHeight),
+                            ImGuiButtonFlags_MouseButtonLeft);
+
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        ImVec2 mousePos = ImGui::GetMousePos();
+        float clickTime = (mousePos.x - pMin.x) / pixelsPerSecond_;
+        clickTime = std::clamp(clickTime, 0.0f, duration);
+
+        if (onKeyframeAdded_) {
+            onKeyframeAdded_(track.nodeId, track.property);
+        }
+    }
+
     // Draw keyframe diamonds
     float diamondSize = 6.0f;
     for (int i = 0; i < static_cast<int>(track.keyframes.size()); ++i) {
@@ -302,22 +377,67 @@ void TimelinePanel::renderTrackRow(const Track& track, float duration) {
         ImVec2(cursorX, pMin.y + regionHeight),
         IM_COL32(255, 60, 60, 220), 2.0f);
 
-    // Double-click on empty area to add keyframe
+    ImGui::EndChild();
+}
+
+void TimelinePanel::renderPotentialTrack(const std::string& nodeId,
+                                           const std::string& property,
+                                           float duration) {
+    // Dimmed label for potential track
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(120, 120, 120, 180));
+    ImGui::Text("+ %s.%s", nodeId.c_str(), property.c_str());
+    ImGui::PopStyleColor();
+
+    // Invisible hit area covering the row for double-click
+    std::string childId = "##pot_" + nodeId + "_" + property;
+    float trackHeight = 30.0f;
+
+    ImGui::BeginChild(childId.c_str(), ImVec2(0, trackHeight), true,
+                      ImGuiWindowFlags_NoScrollbar);
+
+    ImVec2 pMin = ImGui::GetCursorScreenPos();
+    float regionWidth = ImGui::GetContentRegionAvail().x;
+    float regionHeight = ImGui::GetContentRegionAvail().y;
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(pMin, ImVec2(pMin.x + regionWidth, pMin.y + regionHeight),
+                            IM_COL32(40, 40, 50, 60));
+
+    // Double-click to create first keyframe
     ImGui::SetCursorScreenPos(pMin);
-    ImGui::InvisibleButton("##track_hitarea", ImVec2(regionWidth, regionHeight),
+    ImGui::InvisibleButton("##pot_hit", ImVec2(regionWidth, regionHeight),
                             ImGuiButtonFlags_MouseButtonLeft);
 
     if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-        ImVec2 mousePos = ImGui::GetMousePos();
-        float clickTime = (mousePos.x - pMin.x) / pixelsPerSecond_;
-        clickTime = std::clamp(clickTime, 0.0f, duration);
-
         if (onKeyframeAdded_) {
-            onKeyframeAdded_(track.nodeId, track.property);
+            onKeyframeAdded_(nodeId, property);
         }
     }
 
     ImGui::EndChild();
+}
+
+bool TimelinePanel::hasTrackFor(const Animation* anim, const std::string& nodeId,
+                                const std::string& property) const {
+    if (!anim) return false;
+    for (const auto& t : anim->tracks) {
+        if (t.nodeId == nodeId && t.property == property) return true;
+    }
+    return false;
+}
+
+std::vector<std::string> TimelinePanel::getPropertyNames(const std::string& /*nodeId*/) const {
+    // Return the common animatable properties for any node.
+    // In the future this could vary by NodeType (e.g. Label nodes have fontSize).
+    return {
+        "position.x", "position.y",
+        "scale.x", "scale.y",
+        "rotation",
+        "opacity",
+        "anchor.x", "anchor.y",
+        "color.r", "color.g", "color.b",
+        "visible"
+    };
 }
 
 } // namespace anim

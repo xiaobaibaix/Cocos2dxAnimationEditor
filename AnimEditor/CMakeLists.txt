@@ -1,4 +1,12 @@
-set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/third_party/imgui)
+cmake_minimum_required(VERSION 3.20)
+project(AnimEditor LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(glfw3 REQUIRED)
+
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/../third_party/imgui)
 
 file(GLOB IMGUI_SOURCES
     ${IMGUI_DIR}/*.cpp
@@ -26,8 +34,7 @@ add_executable(anim_editor
 target_include_directories(anim_editor PRIVATE
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
-    ${CMAKE_SOURCE_DIR}/third_party/glfw/include
-    ${CMAKE_SOURCE_DIR}/third_party/json/include
+    ${CMAKE_SOURCE_DIR}/../third_party/json/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 

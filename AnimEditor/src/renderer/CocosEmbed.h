@@ -25,6 +25,7 @@ private:
 
     void createFBO(int width, int height);
     void destroyFBO();
+    void drawTestPattern();
 };
 
 } // namespace anim
