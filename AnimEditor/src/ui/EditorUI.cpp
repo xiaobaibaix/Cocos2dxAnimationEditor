@@ -128,10 +128,16 @@ bool EditorUI::init() {
         }
         if (!targetTrack) {
             anim->tracks.push_back(Track{nodeId, property, {}});
-            targetTrack = &anim->tracks.back();
+            markDirty();
+            return;
         }
         float time = timelinePanel_.getCurrentTime();
-        targetTrack->keyframes.push_back(Keyframe{time, 0.0f, EasingType::Linear});
+        bool isVec2 = (property == "position" || property == "scale" || property == "anchor");
+        if (isVec2) {
+            targetTrack->keyframes.push_back(Keyframe{time, Vec2{0.0f, 0.0f}, EasingType::Linear});
+        } else {
+            targetTrack->keyframes.push_back(Keyframe{time, 0.0f, EasingType::Linear});
+        }
         markDirty();
     });
 
@@ -152,6 +158,63 @@ bool EditorUI::init() {
             if (t.nodeId == nodeId && t.property == property) {
                 if (index >= 0 && index < static_cast<int>(t.keyframes.size())) {
                     t.keyframes.erase(t.keyframes.begin() + index);
+                }
+                markDirty();
+                return;
+            }
+        }
+    });
+
+    timelinePanel_.setOnKeyframeChanged([this](const std::string& nodeId, const std::string& property,
+                                                int index, float newTime) {
+        if (!currentProject_ || currentProject_->animations.empty()) return;
+
+        std::string currentAnimName = timelinePanel_.getCurrentAnimationName();
+        Animation* anim = nullptr;
+        for (auto& a : currentProject_->animations) {
+            if (a.name == currentAnimName) {
+                anim = &a;
+                break;
+            }
+        }
+        if (!anim) return;
+
+        for (auto& t : anim->tracks) {
+            if (t.nodeId == nodeId && t.property == property) {
+                if (index >= 0 && index < static_cast<int>(t.keyframes.size())) {
+                    t.keyframes[index].time = newTime;
+                    // Sort keyframes by time after drag
+                    std::sort(t.keyframes.begin(), t.keyframes.end(),
+                              [](const Keyframe& a, const Keyframe& b) { return a.time < b.time; });
+                }
+                markDirty();
+                return;
+            }
+        }
+    });
+
+    timelinePanel_.setOnKeyframeValueChanged([this](const std::string& nodeId, const std::string& property,
+                                                     int index, const Vec2& newValue) {
+        if (!currentProject_ || currentProject_->animations.empty()) return;
+
+        std::string currentAnimName = timelinePanel_.getCurrentAnimationName();
+        Animation* anim = nullptr;
+        for (auto& a : currentProject_->animations) {
+            if (a.name == currentAnimName) {
+                anim = &a;
+                break;
+            }
+        }
+        if (!anim) return;
+
+        for (auto& t : anim->tracks) {
+            if (t.nodeId == nodeId && t.property == property) {
+                if (index >= 0 && index < static_cast<int>(t.keyframes.size())) {
+                    if (std::get_if<Vec2>(&t.keyframes[index].value)) {
+                        t.keyframes[index].value = newValue;
+                    } else {
+                        t.keyframes[index].value = newValue.x;
+                    }
                 }
                 markDirty();
                 return;
