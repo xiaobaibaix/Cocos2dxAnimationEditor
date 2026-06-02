@@ -1,5 +1,17 @@
 # CLAUDE.md
 
+## Current Module: core
+
+**Branch**: `feature/core`
+**Role**: Data layer + coordinator
+**Owns**: `src/core/`, `src/ui/EditorUI.*`
+**Do NOT touch**: `src/ui/FileBrowser*`, `src/ui/NodeTree*`, `src/ui/Property*`, `src/ui/Timeline*`, `src/ui/Preview*`, `src/renderer/`
+
+### Tasks
+- [ ] F4: Wire UndoSystem into property edits — extend PropertyPanel callback to pass old/new values
+- [ ] Add CoreDebugPanel — test data injection, serialization roundtrip, undo stress test
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Rules (MUST FOLLOW)
