@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Rules (MUST FOLLOW)
+
+1. **Stay in your module** — never edit files owned by other modules. Check [docs/MODULES.md](docs/MODULES.md) for ownership.
+2. **Debug panel required** — every feature needs a debug panel (floating window via `Debug >` menu) for independent visual testing.
+3. **Build + test before commit** — `cmake --build build -j8 && ctest --test-dir build --output-on-failure`.
+4. **No cross-module merges** — merge only to develop, never to another module branch.
+5. **Self-contained testing** — debug panels inject their own test data, don't rely on other modules.
+
 ## Build
 
 ```bash
