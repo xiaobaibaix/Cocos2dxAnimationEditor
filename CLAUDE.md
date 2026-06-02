@@ -1,5 +1,19 @@
 # CLAUDE.md
 
+## Current Module: timeline
+
+**Branch**: `feature/timeline`
+**Role**: Timeline panel — clips, tracks, keyframes, event frames
+**Owns**: `src/ui/TimelinePanel.*`
+**Do NOT touch**: `src/core/`, `src/ui/EditorUI.*`, `src/ui/FileBrowser*`, `src/ui/NodeTree*`, `src/ui/Property*`, `src/ui/Preview*`, `src/renderer/`
+
+### Tasks
+- [ ] F8: Keyframe value editing — left-click diamond → popup with value/easing controls
+- [ ] F9: Keyframe horizontal dragging — drag diamonds left/right to change time
+- [ ] F10: Event frame rendering and editing — event markers on a separate lane
+- [ ] Add TimelineDebugPanel — inject test clips/tracks, scatter keyframes, scroll/zoom testing
+
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Development Rules (MUST FOLLOW)
