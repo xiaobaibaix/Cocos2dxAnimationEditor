@@ -58,9 +58,18 @@ void NodeTreePanel::renderNode(const NodePtr& node) {
         default: break;
     }
 
+    bool hasAnim = onQueryNodeAnimated_ && onQueryNodeAnimated_(node->id);
+
     bool opened = ImGui::TreeNodeEx(
         reinterpret_cast<void*>(static_cast<intptr_t>(std::hash<std::string>{}(node->id))),
         flags, "[%s] %s", typeIcon, node->name.c_str());
+
+    if (hasAnim) {
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 200, 50, 255));
+        ImGui::TextUnformatted("\xe2\x97\x86");
+        ImGui::PopStyleColor();
+    }
 
     if (ImGui::IsItemClicked()) {
         selectedId_ = node->id;

@@ -1,11 +1,5 @@
 # CLAUDE.md
 
-## Current Module: timeline
-
-**Branch**: `feature/timeline`
-**Role**: Timeline panel, keyframes, event frames
-**Owns**: `src/ui/Timeline.*`
-**Do NOT touch**: `src/core/`, `src/ui/EditorUI.*`, `src/ui/FileBrowser*`, `src/ui/NodeTree*`, `src/ui/Property*`, `src/ui/PreviewCanvas.*`, `src/renderer/`
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
