@@ -17,11 +17,19 @@ public:
     void setOnNodeDragged(OnNodeDragged cb) { onNodeDragged_ = std::move(cb); }
     bool isHovered() const { return hovered_; }
 
+    float getZoom() const { return zoom_; }
+    float getPanX() const { return panX_; }
+    float getPanY() const { return panY_; }
+
 private:
     CocosEmbed embed_;
     OnNodeDragged onNodeDragged_;
     bool hovered_ = false;
     bool dragging_ = false;
+    bool panning_ = false;
+    float zoom_ = 1.0f;
+    float panX_ = 0.0f;
+    float panY_ = 0.0f;
 };
 
 } // namespace anim

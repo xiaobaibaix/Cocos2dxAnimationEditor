@@ -15,6 +15,7 @@
     #include <GL/gl.h>
 #endif
 
+#include <cmath>
 #include <vector>
 
 namespace anim {
@@ -120,83 +121,89 @@ void CocosEmbed::renderFrame() {
 }
 
 void CocosEmbed::drawTestPattern() {
-    // Generate a checkerboard + crosshair pattern to verify the preview pipeline.
-    // This confirms the FBO→texture→ImGui::Image chain is working.
     std::vector<uint8_t> pixels(static_cast<size_t>(width_) * height_ * 4);
 
-    int sq = 32; // checkerboard square size
-    for (int y = 0; y < height_; ++y) {
-        for (int x = 0; x < width_; ++x) {
+    // Fill background
+    for (size_t i = 0; i < pixels.size(); i += 4) {
+        pixels[i]     = 22;
+        pixels[i + 1] = 22;
+        pixels[i + 2] = 30;
+        pixels[i + 3] = 255;
+    }
+
+    float halfW = width_ * 0.5f;
+    float halfH = height_ * 0.5f;
+    // Negate panY to compensate for UV flip in ImGui::Image
+    float effPanY = -panY_;
+
+    auto setPixel = [&](int x, int y, uint8_t r, uint8_t g, uint8_t b) {
+        if (x >= 0 && x < width_ && y >= 0 && y < height_) {
             size_t idx = (static_cast<size_t>(y) * width_ + x) * 4;
-            bool bright = ((x / sq) + (y / sq)) % 2 == 0;
-            uint8_t c = bright ? 58 : 28;
-            pixels[idx]     = c;
-            pixels[idx + 1] = c;
-            pixels[idx + 2] = c;
-            pixels[idx + 3] = 255;
+            pixels[idx]     = r;
+            pixels[idx + 1] = g;
+            pixels[idx + 2] = b;
+        }
+    };
+
+    // Visible world range for grid line iteration
+    float wxMin = (0 - halfW - panX_) / zoom_;
+    float wxMax = (width_ - halfW - panX_) / zoom_;
+    float wyMin = (0 - halfH - effPanY) / zoom_;
+    float wyMax = (height_ - halfH - effPanY) / zoom_;
+
+    int gridMinor = 32;
+    int gridMajor = 128;
+    int gxStart = static_cast<int>(floorf(wxMin / gridMinor)) - 1;
+    int gxEnd = static_cast<int>(ceilf(wxMax / gridMinor)) + 1;
+    int gyStart = static_cast<int>(floorf(wyMin / gridMinor)) - 1;
+    int gyEnd = static_cast<int>(ceilf(wyMax / gridMinor)) + 1;
+
+    // Vertical grid lines
+    for (int gx = gxStart; gx <= gxEnd; ++gx) {
+        int sx = static_cast<int>(gx * gridMinor * zoom_ + halfW + panX_);
+        bool major = gx * gridMinor % gridMajor == 0;
+        uint8_t c = major ? 42 : 32;
+        for (int y = 0; y < height_; ++y) {
+            setPixel(sx, y, c, c, c + 8);
         }
     }
 
-    // Draw a red crosshair at the center
-    int cx = width_ / 2;
-    int cy = height_ / 2;
-    int chLen = 40;
-    int chW = 2;
-    for (int dy = -chLen; dy <= chLen; ++dy) {
-        for (int dx = -chW; dx <= chW; ++dx) {
-            int px = cx + dx;
-            int py = cy + dy;
-            if (px >= 0 && px < width_ && py >= 0 && py < height_) {
-                size_t idx = (static_cast<size_t>(py) * width_ + px) * 4;
-                pixels[idx]     = 220;
-                pixels[idx + 1] = 40;
-                pixels[idx + 2] = 40;
-                pixels[idx + 3] = 255;
-            }
-        }
-    }
-    for (int dx = -chLen; dx <= chLen; ++dx) {
-        for (int dy = -chW; dy <= chW; ++dy) {
-            int px = cx + dx;
-            int py = cy + dy;
-            if (px >= 0 && px < width_ && py >= 0 && py < height_) {
-                size_t idx = (static_cast<size_t>(py) * width_ + px) * 4;
-                pixels[idx]     = 220;
-                pixels[idx + 1] = 40;
-                pixels[idx + 2] = 40;
-                pixels[idx + 3] = 255;
-            }
+    // Horizontal grid lines
+    for (int gy = gyStart; gy <= gyEnd; ++gy) {
+        int sy = static_cast<int>(gy * gridMinor * zoom_ + halfH + effPanY);
+        bool major = gy * gridMinor % gridMajor == 0;
+        uint8_t c = major ? 42 : 32;
+        for (int x = 0; x < width_; ++x) {
+            setPixel(x, sy, c, c, c + 8);
         }
     }
 
-    // Draw a white border around the full area
-    for (int x = 0; x < width_; ++x) {
-        for (int bw = 0; bw < 2; ++bw) {
-            size_t idxTop = (static_cast<size_t>(bw) * width_ + x) * 4;
-            size_t idxBot = (static_cast<size_t>(height_ - 1 - bw) * width_ + x) * 4;
-            for (int c = 0; c < 3; ++c) {
-                pixels[idxTop + c] = 180;
-                pixels[idxBot + c] = 180;
-            }
-            pixels[idxTop + 3] = 255;
-            pixels[idxBot + 3] = 255;
-        }
-    }
-    for (int y = 0; y < height_; ++y) {
-        for (int bw = 0; bw < 2; ++bw) {
-            size_t idxL = (static_cast<size_t>(y) * width_ + bw) * 4;
-            size_t idxR = (static_cast<size_t>(y) * width_ + width_ - 1 - bw) * 4;
-            for (int c = 0; c < 3; ++c) {
-                pixels[idxL + c] = 180;
-                pixels[idxR + c] = 180;
-            }
-            pixels[idxL + 3] = 255;
-            pixels[idxR + 3] = 255;
+    // Axis lines through world origin
+    int ox = static_cast<int>(halfW + panX_);
+    int oy = static_cast<int>(halfH + effPanY);
+    for (int y = 0; y < height_; ++y) setPixel(ox, y, 55, 55, 75);
+    for (int x = 0; x < width_; ++x) setPixel(x, oy, 55, 55, 75);
+
+    // Crosshair at world origin
+    int chLen = static_cast<int>(20.0f * zoom_);
+    int chW = std::max(1, static_cast<int>(1.5f * zoom_));
+    for (int d = -chLen; d <= chLen; ++d) {
+        for (int w = -chW; w <= chW; ++w) {
+            setPixel(ox + d, oy + w, 200, 70, 70);
+            setPixel(ox + w, oy + d, 200, 70, 70);
         }
     }
 
+    glBindTexture(GL_TEXTURE_2D, textureId_);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width_, height_,
                     GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void CocosEmbed::setViewTransform(float zoom, float panX, float panY) {
+    zoom_ = zoom;
+    panX_ = panX;
+    panY_ = panY;
 }
 
 } // namespace anim
