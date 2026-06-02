@@ -131,6 +131,22 @@ bool EditorUI::init() {
         markDirty();
     });
 
+    nodeTreePanel_.setOnQueryNodeAnimated([this](const std::string& nodeId) -> bool {
+        if (!currentProject_ || currentProject_->animations.empty()) return false;
+        std::string animName = timelinePanel_.getCurrentAnimationName();
+        for (const auto& anim : currentProject_->animations) {
+            if (anim.name == animName) {
+                for (const auto& track : anim.tracks) {
+                    if (track.nodeId == nodeId && !track.keyframes.empty()) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+        return false;
+    });
+
     propertyPanel_.setOnPropertyChanged([this](const std::string& /*nodeId*/) {
         markDirty();
     });
