@@ -5,6 +5,8 @@
 #include "imgui_impl_opengl3.h"
 #include "ui/EditorUI.h"
 
+static bool closeRequested = false;
+
 static void renderFrame(GLFWwindow* window) {
     ImGui::Render();
 
@@ -63,13 +65,30 @@ int main(int argc, char** argv) {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
+        // Handle window close with dirty check
+        if (glfwWindowShouldClose(window)) {
+            if (editor.isDirty() && !closeRequested) {
+                glfwSetWindowShouldClose(window, GLFW_FALSE);
+                editor.showConfirmDiscard();
+                closeRequested = true;
+            }
+        }
+
+        // Check if editor wants to quit (user chose Discard on close)
+        if (closeRequested && editor.wantsToQuit()) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+
+        // Update window title with dirty indicator
+        {
+            const char* title = editor.isDirty() ? "AnimEditor *" : "AnimEditor";
+            glfwSetWindowTitle(window, title);
+        }
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // DockSpaceOverViewport must be called every frame to maintain
-        // the full-viewport invisible host window. On the first frame we
-        // build the node tree with DockBuilder; subsequent frames reuse it.
         mainDockId = ImGui::DockSpaceOverViewport(0, nullptr,
             ImGuiDockNodeFlags_PassthruCentralNode);
 

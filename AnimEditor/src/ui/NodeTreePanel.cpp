@@ -23,6 +23,9 @@ void NodeTreePanel::render() {
                 if (onNodeSelected_) {
                     onNodeSelected_(id);
                 }
+                if (onNodeChanged_) {
+                    onNodeChanged_();
+                }
             }
         }
     }
@@ -73,6 +76,9 @@ void NodeTreePanel::renderNode(const NodePtr& node) {
                 std::string childId = "node_" + std::to_string(nodeCounter_);
                 std::string childName = "Node " + std::to_string(nodeCounter_);
                 sceneGraph_->addNode(childId, NodeType::Node, childName, node->id);
+                if (onNodeChanged_) {
+                    onNodeChanged_();
+                }
             }
         }
         if (ImGui::MenuItem("Delete")) {
@@ -83,6 +89,9 @@ void NodeTreePanel::renderNode(const NodePtr& node) {
                     if (onNodeSelected_) {
                         onNodeSelected_("");
                     }
+                }
+                if (onNodeChanged_) {
+                    onNodeChanged_();
                 }
             }
         }

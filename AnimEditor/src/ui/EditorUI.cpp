@@ -10,7 +10,13 @@ bool EditorUI::init() {
     fileBrowser_.setOnFileOpen([this](const std::string& path) {
         if (path.size() >= 5 &&
             path.compare(path.size() - 5, 5, ".anim") == 0) {
-            openAnimFile(path);
+            if (dirty_) {
+                pendingAction_ = PendingAction::OpenAnim;
+                pendingOpenPath_ = path;
+                showConfirmDiscard_ = true;
+            } else {
+                doOpenAnimFile(path);
+            }
         }
     });
 
@@ -27,20 +33,22 @@ bool EditorUI::init() {
         timelinePanel_.setSelectedNode(nodeId);
     });
 
-    propertyPanel_.setOnPropertyChanged([](const std::string& /*nodeId*/) {
-        // Property changed notification — can trigger auto-save or undo registration later
+    nodeTreePanel_.setOnNodeChanged([this]() {
+        markDirty();
+    });
+
+    propertyPanel_.setOnPropertyChanged([this](const std::string& /*nodeId*/) {
+        markDirty();
     });
 
     // Timeline panel callbacks
     timelinePanel_.setOnTimeChanged([this](float time) {
-        // Update current time — Phase 4 will drive preview via AnimationEngine
         // Time is already updated inside TimelinePanel via slider/buttons
     });
 
     timelinePanel_.setOnKeyframeAdded([this](const std::string& nodeId, const std::string& property) {
         if (!currentProject_ || currentProject_->animations.empty()) return;
 
-        // Find the currently selected animation clip
         std::string currentAnimName = timelinePanel_.getCurrentAnimationName();
         Animation* anim = nullptr;
         for (auto& a : currentProject_->animations) {
@@ -51,7 +59,6 @@ bool EditorUI::init() {
         }
         if (!anim) return;
 
-        // Find or create track
         Track* targetTrack = nullptr;
         for (auto& t : anim->tracks) {
             if (t.nodeId == nodeId && t.property == property) {
@@ -65,6 +72,7 @@ bool EditorUI::init() {
         }
         float time = timelinePanel_.getCurrentTime();
         targetTrack->keyframes.push_back(Keyframe{time, 0.0f, EasingType::Linear});
+        markDirty();
     });
 
     timelinePanel_.setOnKeyframeRemoved([this](const std::string& nodeId, const std::string& property, int index) {
@@ -85,12 +93,12 @@ bool EditorUI::init() {
                 if (index >= 0 && index < static_cast<int>(t.keyframes.size())) {
                     t.keyframes.erase(t.keyframes.begin() + index);
                 }
+                markDirty();
                 return;
             }
         }
     });
 
-    // Canvas node dragging — update selected node position
     previewCanvas_.setOnNodeDragged([this](float dx, float dy) {
         const std::string& selectedId = nodeTreePanel_.getSelectedNode();
         if (selectedId.empty()) return;
@@ -102,15 +110,14 @@ bool EditorUI::init() {
         node->properties.position.x += dx;
         node->properties.position.y += dy;
 
-        // Refresh the property panel to reflect new position
         propertyPanel_.setNode(node);
+        markDirty();
     });
 
     sceneGraph_.setOnChanged([this]() {
-        // Scene graph changed — can trigger auto-save or dirty flag later
+        markDirty();
     });
 
-    // Initialize preview canvas (renders to FBO, displayed via ImGui texture)
     previewCanvas_.init(800, 600);
 
     return true;
@@ -125,17 +132,14 @@ void EditorUI::render() {
     renderPopups();
     fileBrowser_.render();
 
-    // Preview canvas with FBO-rendered content
     previewCanvas_.render();
-
-    // Properties panel (docked to top-right by DockBuilder)
     propertyPanel_.render();
-
-    // Nodes panel (docked to bottom-left by DockBuilder)
     nodeTreePanel_.render();
-
-    // Timeline panel (docked to bottom-right by DockBuilder)
     timelinePanel_.render();
+}
+
+void EditorUI::showConfirmDiscard() {
+    showConfirmDiscard_ = true;
 }
 
 void EditorUI::renderMenuBar() {
@@ -145,38 +149,30 @@ void EditorUI::renderMenuBar() {
                 // TODO: native folder dialog
             }
             if (ImGui::MenuItem("New Animation")) {
-                sceneGraph_.clear();
-                undoSystem_.clear();
-                currentProject_ = std::make_shared<AnimProject>();
-                currentFilePath_.clear();
-
-                Animation defaultAnim;
-                defaultAnim.name = "New Animation";
-                defaultAnim.duration = 2.0f;
-                defaultAnim.loop = false;
-                currentProject_->animations.push_back(std::move(defaultAnim));
-
-                syncProjectToUI();
+                if (dirty_) {
+                    pendingAction_ = PendingAction::NewAnimation;
+                    showConfirmDiscard_ = true;
+                } else {
+                    doNewAnimation();
+                }
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Save", "Ctrl+S")) {
-                if (currentProject_) {
-                    if (!currentFilePath_.empty()) {
-                        Serializer::saveToFile(*currentProject_, currentFilePath_);
-                    } else {
-                        // No file path yet — open Save As popup
-                        showSaveAsPopup_ = true;
-                        popupTextBuf_[0] = '\0';
-                    }
-                }
+                doSave();
             }
             if (ImGui::MenuItem("Save As...")) {
                 showSaveAsPopup_ = true;
                 popupTextBuf_[0] = '\0';
             }
             if (ImGui::MenuItem("Open .anim...")) {
-                showOpenPopup_ = true;
-                popupTextBuf_[0] = '\0';
+                if (dirty_) {
+                    pendingAction_ = PendingAction::OpenAnim;
+                    pendingOpenPath_.clear();
+                    showConfirmDiscard_ = true;
+                } else {
+                    showOpenPopup_ = true;
+                    popupTextBuf_[0] = '\0';
+                }
             }
             ImGui::EndMenu();
         }
@@ -196,9 +192,9 @@ void EditorUI::renderMenuBar() {
 
                     if (eraseIt != currentProject_->animations.end()) {
                         currentProject_->animations.erase(eraseIt, currentProject_->animations.end());
+                        markDirty();
                     }
 
-                    // Switch to first remaining clip or clear
                     if (!currentProject_->animations.empty()) {
                         timelinePanel_.setCurrentAnimation(currentProject_->animations.front().name);
                         timelinePanel_.setCurrentTime(0.0f);
@@ -212,9 +208,11 @@ void EditorUI::renderMenuBar() {
         if (ImGui::BeginMenu("Edit")) {
             if (ImGui::MenuItem("Undo", "Ctrl+Z", false, undoSystem_.canUndo())) {
                 undoSystem_.undo();
+                markDirty();
             }
             if (ImGui::MenuItem("Redo", "Ctrl+Y", false, undoSystem_.canRedo())) {
                 undoSystem_.redo();
+                markDirty();
             }
             ImGui::EndMenu();
         }
@@ -223,6 +221,62 @@ void EditorUI::renderMenuBar() {
 }
 
 void EditorUI::renderPopups() {
+    // Confirm Discard popup
+    if (showConfirmDiscard_) {
+        ImGui::OpenPopup("Unsaved Changes");
+        showConfirmDiscard_ = false;
+    }
+    if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("You have unsaved changes. Save before continuing?");
+        ImGui::Spacing();
+
+        if (ImGui::Button("Save", ImVec2(100, 0))) {
+            doSave();
+            ImGui::CloseCurrentPopup();
+            markClean();
+            // Execute pending action
+            if (pendingAction_ == PendingAction::NewAnimation) {
+                doNewAnimation();
+            } else if (pendingAction_ == PendingAction::OpenAnim) {
+                if (pendingOpenPath_.empty()) {
+                    showOpenPopup_ = true;
+                    popupTextBuf_[0] = '\0';
+                } else {
+                    doOpenAnimFile(pendingOpenPath_);
+                }
+            }
+            pendingAction_ = PendingAction::None;
+            pendingOpenPath_.clear();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Discard", ImVec2(100, 0))) {
+            ImGui::CloseCurrentPopup();
+            markClean();
+            if (pendingAction_ == PendingAction::NewAnimation) {
+                doNewAnimation();
+            } else if (pendingAction_ == PendingAction::OpenAnim) {
+                if (pendingOpenPath_.empty()) {
+                    showOpenPopup_ = true;
+                    popupTextBuf_[0] = '\0';
+                } else {
+                    doOpenAnimFile(pendingOpenPath_);
+                }
+            } else {
+                // Window close discard — signal quit
+                wantsToQuit_ = true;
+            }
+            pendingAction_ = PendingAction::None;
+            pendingOpenPath_.clear();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(100, 0))) {
+            ImGui::CloseCurrentPopup();
+            pendingAction_ = PendingAction::None;
+            pendingOpenPath_.clear();
+        }
+        ImGui::EndPopup();
+    }
+
     // New Clip popup
     if (showNewClipPopup_) {
         ImGui::OpenPopup("New Clip");
@@ -243,6 +297,7 @@ void EditorUI::renderPopups() {
                 timelinePanel_.setProject(currentProject_.get());
                 timelinePanel_.setCurrentAnimation(currentProject_->animations.back().name);
                 timelinePanel_.setCurrentTime(0.0f);
+                markDirty();
             }
             ImGui::CloseCurrentPopup();
         }
@@ -286,7 +341,13 @@ void EditorUI::renderPopups() {
                                           ImGuiInputTextFlags_EnterReturnsTrue);
         if (ImGui::Button("Open") || confirmed) {
             if (popupTextBuf_[0] != '\0') {
-                openAnimFile(popupTextBuf_);
+                if (dirty_) {
+                    pendingAction_ = PendingAction::OpenAnim;
+                    pendingOpenPath_ = popupTextBuf_;
+                    showConfirmDiscard_ = true;
+                } else {
+                    doOpenAnimFile(popupTextBuf_);
+                }
             }
             ImGui::CloseCurrentPopup();
         }
@@ -298,18 +359,52 @@ void EditorUI::renderPopups() {
     }
 }
 
+void EditorUI::doSave() {
+    if (!currentProject_) return;
+    if (!currentFilePath_.empty()) {
+        Serializer::saveToFile(*currentProject_, currentFilePath_);
+        markClean();
+    } else {
+        // No file path yet — open Save As popup
+        showSaveAsPopup_ = true;
+        popupTextBuf_[0] = '\0';
+    }
+}
+
+void EditorUI::doNewAnimation() {
+    sceneGraph_.clear();
+    undoSystem_.clear();
+    currentProject_ = std::make_shared<AnimProject>();
+    currentFilePath_.clear();
+
+    Animation defaultAnim;
+    defaultAnim.name = "New Animation";
+    defaultAnim.duration = 2.0f;
+    defaultAnim.loop = false;
+    currentProject_->animations.push_back(std::move(defaultAnim));
+
+    syncProjectToUI();
+    markClean();
+}
+
+void EditorUI::doOpenAnimFile(const std::string& filePath) {
+    auto project = Serializer::loadFromFile(filePath);
+    if (project) {
+        currentProject_ = std::make_shared<AnimProject>(std::move(*project));
+        currentFilePath_ = filePath;
+        syncProjectToUI();
+        markClean();
+    }
+}
+
 void EditorUI::syncProjectToUI() {
     if (!currentProject_) return;
 
-    // Rebuild scene graph from project node tree
     sceneGraph_.clear();
     for (const auto& nodePtr : currentProject_->nodeTree) {
-        // Add each root node to the scene graph
         auto added = sceneGraph_.addNode(nodePtr->id, nodePtr->type, nodePtr->name, std::nullopt);
-        // TODO: recursively add children when SceneGraph supports deeper insertion
     }
 
-    // Sync timeline to the first animation clip
     timelinePanel_.setProject(currentProject_.get());
     if (!currentProject_->animations.empty()) {
         timelinePanel_.setCurrentAnimation(currentProject_->animations.front().name);
@@ -319,7 +414,6 @@ void EditorUI::syncProjectToUI() {
     timelinePanel_.setCurrentTime(0.0f);
     timelinePanel_.setSelectedNode("");
 
-    // Reset selection state
     nodeTreePanel_.setSelectedNode("");
     propertyPanel_.setNode(nullptr);
     undoSystem_.clear();
@@ -333,14 +427,16 @@ void EditorUI::saveAs(const std::string& path) {
     if (!currentProject_) return;
     currentFilePath_ = path;
     Serializer::saveToFile(*currentProject_, currentFilePath_);
+    markClean();
 }
 
 void EditorUI::openAnimFile(const std::string& filePath) {
-    auto project = Serializer::loadFromFile(filePath);
-    if (project) {
-        currentProject_ = std::make_shared<AnimProject>(std::move(*project));
-        currentFilePath_ = filePath;
-        syncProjectToUI();
+    if (dirty_) {
+        pendingAction_ = PendingAction::OpenAnim;
+        pendingOpenPath_ = filePath;
+        showConfirmDiscard_ = true;
+    } else {
+        doOpenAnimFile(filePath);
     }
 }
 

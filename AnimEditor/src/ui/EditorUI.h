@@ -7,6 +7,7 @@
 #include "core/AnimData.h"
 #include "core/SceneGraph.h"
 #include "core/UndoSystem.h"
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -21,6 +22,10 @@ public:
     void openProject(const std::string& folderPath);
     void openAnimFile(const std::string& filePath);
 
+    bool isDirty() const { return dirty_; }
+    bool wantsToQuit() const { return wantsToQuit_; }
+    void showConfirmDiscard();
+
 private:
     FileBrowserPanel fileBrowser_;
     NodeTreePanel nodeTreePanel_;
@@ -32,16 +37,32 @@ private:
     std::shared_ptr<anim::AnimProject> currentProject_;
     std::string currentFilePath_;
 
+    // Dirty flag
+    bool dirty_ = false;
+    bool wantsToQuit_ = false;
+
     // Popup state
     bool showNewClipPopup_ = false;
     bool showSaveAsPopup_ = false;
     bool showOpenPopup_ = false;
+    bool showConfirmDiscard_ = false;
     char popupTextBuf_[256] = {};
+
+    // Pending action after confirm discard
+    enum class PendingAction { None, NewAnimation, OpenAnim };
+    PendingAction pendingAction_ = PendingAction::None;
+    std::string pendingOpenPath_;
+
+    void markDirty() { dirty_ = true; }
+    void markClean() { dirty_ = false; }
 
     void renderMenuBar();
     void renderPopups();
     void syncProjectToUI();
     void saveAs(const std::string& path);
+    void doSave();
+    void doNewAnimation();
+    void doOpenAnimFile(const std::string& path);
 };
 
 } // namespace anim
