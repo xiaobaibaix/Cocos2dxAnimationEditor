@@ -1,0 +1,12 @@
+[submodule "third_party/glfw"]
+	path = third_party/glfw
+	url = git@github.com:glfw/glfw.git
+[submodule "third_party/imgui"]
+	path = third_party/imgui
+	url = git@github.com:ocornut/imgui.git
+[submodule "third_party/json"]
+	path = third_party/json
+	url = git@github.com:nlohmann/json.git
+[submodule "third_party/cocos2d-x"]
+	path = third_party/cocos2d-x
+	url = git@github.com:cocos2d/cocos2d-x.git
