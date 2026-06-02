@@ -125,6 +125,8 @@ static json keyframeValueToJson(const KeyframeValue& kv) {
             return v;
         } else if constexpr (std::is_same_v<T, std::string>) {
             return v;
+        } else if constexpr (std::is_same_v<T, Vec2>) {
+            return vec2ToJson(v);
         }
     }, kv);
 }
@@ -138,6 +140,8 @@ static std::optional<KeyframeValue> jsonToKeyframeValue(const json& j) {
         return j.get<float>();
     } else if (j.is_string()) {
         return j.get<std::string>();
+    } else if (j.is_object() && j.contains("x") && j.contains("y")) {
+        return jsonToVec2(j);
     }
     return std::nullopt;
 }

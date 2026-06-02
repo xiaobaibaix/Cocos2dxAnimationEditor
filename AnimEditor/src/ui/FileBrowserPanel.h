@@ -16,9 +16,11 @@ struct FileEntry {
 class FileBrowserPanel {
 public:
     using OnFileOpen = std::function<void(const std::string& path)>;
+    using OnFileDeleted = std::function<void(const std::string& path)>;
 
     void setRootPath(const std::string& path);
     void setOnFileOpen(OnFileOpen cb) { onFileOpen_ = std::move(cb); }
+    void setOnFileDeleted(OnFileDeleted cb) { onFileDeleted_ = std::move(cb); }
     void render();
 
 private:
@@ -26,6 +28,7 @@ private:
     std::string currentPath_;
     std::vector<FileEntry> entries_;
     OnFileOpen onFileOpen_;
+    OnFileDeleted onFileDeleted_;
 
     void refreshDirectory(const std::string& path);
 };
