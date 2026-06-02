@@ -1,4 +1,5 @@
 #include "ui/EditorUI.h"
+#include "debug/DemoDebugPanel.h"
 #include "core/Serializer.h"
 #include "platform/NativeDialogs.h"
 #include "imgui.h"
@@ -178,6 +179,8 @@ bool EditorUI::init() {
     });
 
     previewCanvas_.init(800, 600);
+
+    registerDebugPanel<DemoDebugPanel>();
 
     return true;
 }
