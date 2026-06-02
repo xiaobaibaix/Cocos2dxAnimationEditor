@@ -16,7 +16,6 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
         ImGui::Text("No clips");
         ImGui::SameLine();
         if (ImGui::Button("New")) {
-            // Auto-name new clip
             Animation newClip;
             newClip.name = "clip_0";
             newClip.duration = 1.0f;
@@ -31,7 +30,6 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
         return;
     }
 
-    // Build a list of clip names for the combo
     int currentIndex = -1;
     std::vector<const char*> clipNames;
     for (int i = 0; i < static_cast<int>(project->animations.size()); ++i) {
@@ -56,9 +54,7 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
 
     ImGui::SameLine();
 
-    // New button
     if (ImGui::Button("New")) {
-        // Auto-name: clip_0, clip_1, clip_2, ...
         int clipNum = 0;
         std::string candidate;
         bool collision;
@@ -84,7 +80,6 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
 
     ImGui::SameLine();
 
-    // Del button
     if (ImGui::Button("Del")) {
         if (currentIndex >= 0 && currentIndex < static_cast<int>(project->animations.size())) {
             project->animations.erase(project->animations.begin() + currentIndex);
@@ -101,19 +96,16 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
         }
     }
 
-    // Rename support — find the current animation
     if (currentIndex >= 0 && currentIndex < static_cast<int>(project->animations.size())) {
         ImGui::SameLine();
         if (ImGui::Button(renameMode_ ? "OK" : "Rename")) {
             if (renameMode_) {
-                // Confirm rename
                 if (clipNameBuf_[0] != '\0') {
                     project->animations[currentIndex].name = clipNameBuf_;
                     currentAnim_ = clipNameBuf_;
                 }
                 renameMode_ = false;
             } else {
-                // Enter rename mode
                 auto& anim = project->animations[currentIndex];
                 std::strncpy(clipNameBuf_, anim.name.c_str(), sizeof(clipNameBuf_) - 1);
                 clipNameBuf_[sizeof(clipNameBuf_) - 1] = '\0';
@@ -138,7 +130,6 @@ void TimelinePanel::renderClipSelector(AnimProject* project) {
 void TimelinePanel::render() {
     ImGui::Begin("Timeline");
 
-    // Clip selector at top
     renderClipSelector(project_);
 
     if (!project_ || currentAnim_.empty()) {
@@ -147,7 +138,6 @@ void TimelinePanel::render() {
         return;
     }
 
-    // Find the current animation by name
     Animation* anim = nullptr;
     for (auto& a : project_->animations) {
         if (a.name == currentAnim_) {
@@ -165,18 +155,37 @@ void TimelinePanel::render() {
     renderTransportControls(anim);
     ImGui::Separator();
 
-    renderTimeRuler(anim->duration);
+    // Content width for the full timeline
+    float contentWidth = anim->duration * pixelsPerSecond_ + 20.0f;
 
-    // Track area — existing tracks
-    for (auto& track : anim->tracks) {
-        renderTrackRow(track, anim->duration);
+    // ── Single outer scroll area for ruler + all track rows ──
+    ImGui::BeginChild("##trackScrollArea", ImVec2(0, 0), false,
+                      ImGuiWindowFlags_HorizontalScrollbar);
+
+    // Horizontal scroll with Shift+wheel or horizontal wheel
+    if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+        float wheelH = ImGui::GetIO().MouseWheelH;
+        float wheelV = ImGui::GetIO().MouseWheel;
+        if (wheelH != 0.0f || (wheelV != 0.0f && ImGui::GetIO().KeyShift)) {
+            float scrollX = ImGui::GetScrollX();
+            scrollX -= (wheelH + (ImGui::GetIO().KeyShift ? wheelV : 0.0f)) * 50.0f;
+            if (scrollX < 0.0f) scrollX = 0.0f;
+            float maxScroll = std::max(0.0f, contentWidth - ImGui::GetWindowWidth());
+            if (scrollX > maxScroll) scrollX = maxScroll;
+            ImGui::SetScrollX(scrollX);
+        }
     }
 
-    // Potential tracks for selected node — properties without a track yet
+    renderTimeRuler(anim->duration, contentWidth);
+
+    for (auto& track : anim->tracks) {
+        renderTrackRow(track, anim->duration, contentWidth);
+    }
+
     if (project_ && !selectedNodeId_.empty()) {
         for (const auto& prop : getPropertyNames(selectedNodeId_)) {
             if (!hasTrackFor(anim, selectedNodeId_, prop)) {
-                renderPotentialTrack(selectedNodeId_, prop, anim->duration);
+                renderPotentialTrack(selectedNodeId_, prop, anim->duration, contentWidth);
             }
         }
     }
@@ -187,23 +196,24 @@ void TimelinePanel::render() {
         ImGui::TextDisabled("Double-click a property row below to add the first keyframe.");
     }
 
-    ImGui::End();
+    ImGui::EndChild(); // ##trackScrollArea
+    ImGui::End(); // Timeline
 }
 
-void TimelinePanel::renderTimeRuler(float duration) {
+void TimelinePanel::renderTimeRuler(float duration, float contentWidth) {
     float rulerHeight = 24.0f;
 
-    ImGui::BeginChild("##timeRuler", ImVec2(0, rulerHeight), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild("##timeRuler", ImVec2(contentWidth, rulerHeight), true,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImVec2 pMin = ImGui::GetCursorScreenPos();
     ImDrawList* drawList = ImGui::GetWindowDrawList();
-    float regionWidth = ImGui::GetContentRegionAvail().x;
+    float regionWidth = contentWidth;
     float regionHeight = ImGui::GetContentRegionAvail().y;
 
     drawList->AddRectFilled(pMin, ImVec2(pMin.x + regionWidth, pMin.y + regionHeight),
                             IM_COL32(35, 35, 45, 255));
 
-    // Adaptive tick spacing based on zoom level
     float tickStep = 0.1f;
     while (tickStep * pixelsPerSecond_ < 50.0f) tickStep *= 2.0f;
     while (tickStep * pixelsPerSecond_ > 150.0f) tickStep /= 2.0f;
@@ -238,7 +248,6 @@ void TimelinePanel::renderTimeRuler(float duration) {
 }
 
 void TimelinePanel::renderTransportControls(Animation* anim) {
-    // Play / Pause
     if (isPlaying_) {
         if (ImGui::Button("Pause")) {
             isPlaying_ = false;
@@ -251,7 +260,6 @@ void TimelinePanel::renderTransportControls(Animation* anim) {
 
     ImGui::SameLine();
 
-    // Stop: reset to beginning
     if (ImGui::Button("Stop")) {
         isPlaying_ = false;
         currentTime_ = 0.0f;
@@ -262,14 +270,12 @@ void TimelinePanel::renderTransportControls(Animation* anim) {
 
     ImGui::SameLine();
 
-    // Time display
     char timeLabel[64];
     snprintf(timeLabel, sizeof(timeLabel), "%.2f / %.2f", currentTime_, anim->duration);
     ImGui::Text("%s", timeLabel);
 
     ImGui::SameLine();
 
-    // Time slider
     float prevTime = currentTime_;
     ImGui::SetNextItemWidth(200.0f);
     ImGui::SliderFloat("##time", &currentTime_, 0.0f, anim->duration, "%.2f s");
@@ -281,17 +287,15 @@ void TimelinePanel::renderTransportControls(Animation* anim) {
 
     ImGui::SameLine();
 
-    // Zoom control
     ImGui::Text("Zoom:");
     ImGui::SameLine();
     ImGui::SetNextItemWidth(120.0f);
     ImGui::SliderFloat("##zoom", &pixelsPerSecond_, 50.0f, 600.0f, "%.0f px/s");
 }
 
-void TimelinePanel::renderTrackRow(const Track& track, float duration) {
+void TimelinePanel::renderTrackRow(const Track& track, float duration, float contentWidth) {
     bool isSelected = (track.nodeId == selectedNodeId_);
 
-    // Track label with highlight for selected node
     std::string label = track.nodeId + "." + track.property;
     if (isSelected) {
         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 220, 100, 255));
@@ -303,25 +307,23 @@ void TimelinePanel::renderTrackRow(const Track& track, float duration) {
         ImGui::PopStyleColor();
     }
 
-    // Track timeline area as a child region
     std::string childId = "##track_" + track.nodeId + "_" + track.property;
     float trackHeight = 30.0f;
-    float totalWidth = duration * pixelsPerSecond_;
 
-    ImGui::BeginChild(childId.c_str(), ImVec2(0, trackHeight), true, ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild(childId.c_str(), ImVec2(contentWidth, trackHeight), true,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImVec2 pMin = ImGui::GetCursorScreenPos();
     ImDrawList* drawList = ImGui::GetWindowDrawList();
-    float regionWidth = ImGui::GetContentRegionAvail().x;
+    float regionWidth = contentWidth;
     float regionHeight = ImGui::GetContentRegionAvail().y;
 
-    // Light background for selected node's track
     if (isSelected) {
         drawList->AddRectFilled(pMin, ImVec2(pMin.x + regionWidth, pMin.y + regionHeight),
                                 IM_COL32(60, 55, 30, 80));
     }
 
-    // Hit area for adding keyframes by double-click (before keyframe buttons so they take priority)
+    // Hit area for adding keyframes by double-click
     ImGui::SetCursorScreenPos(pMin);
     ImGui::InvisibleButton("##track_hitarea", ImVec2(regionWidth, regionHeight),
                             ImGuiButtonFlags_MouseButtonLeft);
@@ -343,7 +345,6 @@ void TimelinePanel::renderTrackRow(const Track& track, float duration) {
         float x = pMin.x + kf.time * pixelsPerSecond_;
         float y = pMin.y + regionHeight * 0.5f;
 
-        // Diamond shape (two triangles forming a rhombus)
         ImU32 diamondColor = IM_COL32(255, 220, 50, 255);
         drawList->AddTriangleFilled(
             ImVec2(x, y - diamondSize),
@@ -356,7 +357,6 @@ void TimelinePanel::renderTrackRow(const Track& track, float duration) {
             ImVec2(x, y + diamondSize),
             diamondColor);
 
-        // Right-click on keyframe to remove
         ImVec2 kfTopLeft(x - diamondSize, y - diamondSize);
         ImVec2 kfBotRight(x + diamondSize, y + diamondSize);
         ImGui::SetCursorScreenPos(kfTopLeft);
@@ -382,28 +382,25 @@ void TimelinePanel::renderTrackRow(const Track& track, float duration) {
 
 void TimelinePanel::renderPotentialTrack(const std::string& nodeId,
                                            const std::string& property,
-                                           float duration) {
-    // Dimmed label for potential track
+                                           float duration, float contentWidth) {
     ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(120, 120, 120, 180));
     ImGui::Text("+ %s.%s", nodeId.c_str(), property.c_str());
     ImGui::PopStyleColor();
 
-    // Invisible hit area covering the row for double-click
     std::string childId = "##pot_" + nodeId + "_" + property;
     float trackHeight = 30.0f;
 
-    ImGui::BeginChild(childId.c_str(), ImVec2(0, trackHeight), true,
-                      ImGuiWindowFlags_NoScrollbar);
+    ImGui::BeginChild(childId.c_str(), ImVec2(contentWidth, trackHeight), true,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImVec2 pMin = ImGui::GetCursorScreenPos();
-    float regionWidth = ImGui::GetContentRegionAvail().x;
+    float regionWidth = contentWidth;
     float regionHeight = ImGui::GetContentRegionAvail().y;
 
     ImDrawList* drawList = ImGui::GetWindowDrawList();
     drawList->AddRectFilled(pMin, ImVec2(pMin.x + regionWidth, pMin.y + regionHeight),
                             IM_COL32(40, 40, 50, 60));
 
-    // Double-click to create first keyframe
     ImGui::SetCursorScreenPos(pMin);
     ImGui::InvisibleButton("##pot_hit", ImVec2(regionWidth, regionHeight),
                             ImGuiButtonFlags_MouseButtonLeft);
@@ -427,8 +424,6 @@ bool TimelinePanel::hasTrackFor(const Animation* anim, const std::string& nodeId
 }
 
 std::vector<std::string> TimelinePanel::getPropertyNames(const std::string& /*nodeId*/) const {
-    // Return the common animatable properties for any node.
-    // In the future this could vary by NodeType (e.g. Label nodes have fontSize).
     return {
         "position.x", "position.y",
         "scale.x", "scale.y",
