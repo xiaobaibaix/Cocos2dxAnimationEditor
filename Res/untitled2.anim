@@ -1,0 +1,54 @@
+{
+  "animations": [
+    {
+      "duration": 2.0,
+      "loop": false,
+      "name": "New Animation",
+      "tracks": []
+    }
+  ],
+  "events": [],
+  "meta": {
+    "canvas": {
+      "height": 720,
+      "width": 1280
+    },
+    "frameRate": 60,
+    "version": "1.0"
+  },
+  "nodeTree": [
+    {
+      "children": [],
+      "id": "node_1",
+      "name": "Node",
+      "properties": {
+        "anchor": {
+          "x": 0.5,
+          "y": 0.5
+        },
+        "color": {
+          "b": 255,
+          "g": 255,
+          "r": 255
+        },
+        "font": "",
+        "fontSize": 24.0,
+        "opacity": 255,
+        "position": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "rotation": 0.0,
+        "scale": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "text": "",
+        "texture": "",
+        "visible": true,
+        "zIndex": 0
+      },
+      "type": "Node"
+    }
+  ]
+}

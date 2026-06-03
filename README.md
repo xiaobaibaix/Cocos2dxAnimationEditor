@@ -47,3 +47,26 @@ master                     ← 稳定发布
 ```
 
 详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+
+  # 当前分支构建 + 测试                                                                                                                     
+  ./scripts/build.sh --test                                                                                                                 
+                                                                                                                                            
+  # 构建所有 7 个分支                                                                                                                       
+  ./scripts/build.sh --all                                                                                                                  
+                                                                                                                                            
+  # 构建所有 + 运行测试                                                                                                                     
+  ./scripts/build.sh --all --test                                                                                                           
+                                                                                                                                            
+  # 同步 develop → 所有 feature 分支（合并 + 更新 submodule）                                                                               
+  ./scripts/build.sh --sync                                                                                                                 
+                                                                                                                                            
+  # 同步 + 构建所有                                                                                                                         
+  ./scripts/build.sh --sync --all --test                                                                                                    
+                                                                                                                                            
+  # 清理构建 + 全量重建                                                                                                                     
+  ./scripts/build.sh --clean --all                                                                                                          
+                                                                                                                                            
+  脚本位置: scripts/build.sh      
+
+cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON                                                                
+cmake --build build -j8        
